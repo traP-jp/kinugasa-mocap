@@ -1,0 +1,35 @@
+@startuml overview
+
+title kinugasa-mocap Architecture Overview
+
+
+rectangle "Mocap Team Managed Components" as MocapTeamManaged {
+	actor "Mocap Team" as MocapTeam
+	component "Camera" as Camera
+	component "Runner" as Runner
+}
+
+rectangle "Kinugasa Admin Managed Components" as KinugasaAdminManaged {
+	component "Recording Web UI" as RecordingWebUI
+	component "Console Server" as RecordingServer
+
+	component "LiveKit Server" as LiveKitServer
+	component "RIST Server" as RISTServer
+
+	storage "RecordingStorage" as RecordingStorage
+	RISTServer --> RecordingStorage : Upload
+	RISTServer --> LiveKitServer : Stream (WebRTC)
+	LiveKitServer --> RecordingWebUI : Stream (WebRTC)
+	RecordingServer --> RecordingStorage : Control (S3 API)
+	RecordingServer --> LiveKitServer : Control (LiveKit API)
+	RecordingServer --> RISTServer : Control (gRPC)
+	RecordingWebUI <-> RecordingServer
+}
+
+
+Camera "*" --> "1" RISTServer : Stream (RIST)
+MocapTeam --> RecordingWebUI
+RecordingStorage <-- Runner : Download
+
+
+@enduml
