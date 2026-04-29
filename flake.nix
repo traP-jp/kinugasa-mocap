@@ -49,12 +49,19 @@
               pnpm
               treefmt
               cargo-tarpaulin
+
+              # PlantUML
+              graphviz
+              plantuml
+              jdk21
+
               config.packages."ci:treefmt:sync"
               config.packages.rust-toolchain
             ];
 
             shellHook = ''
               treefmt-sync
+              export JAVA_HOME="${pkgs.jdk21}/lib/openjdk"
             '';
           };
         };
