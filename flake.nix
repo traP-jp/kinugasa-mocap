@@ -32,5 +32,31 @@
         ./treefmt.nix
         ./rust-toolchain.nix
       ];
+
+      perSystem =
+        {
+          pkgs,
+          config,
+          ...
+        }:
+        {
+          devShells.default = pkgs.mkShell {
+            name = "devshell";
+
+            packages = with pkgs; [
+              cargo-hakari
+              nodejs
+              pnpm
+              treefmt
+              cargo-tarpaulin
+              config.packages."ci:treefmt:sync"
+              config.packages.rust-toolchain
+            ];
+
+            shellHook = ''
+              treefmt-sync
+            '';
+          };
+        };
     };
 }
