@@ -35,7 +35,7 @@ Status: **Draft**
 ひとまずはコンソールと録画システムだけを作るようにしたい。
 
 ## Detailed Design
-
+`docs/` 内に `.puml` を置いておける場所を作ってそこに書き出す。
 
 ## Tasks
 
