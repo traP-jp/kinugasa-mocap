@@ -1,0 +1,16 @@
+[workspace]
+members = ["server/*","server/hakari"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+publish = false
+version = "0.1.0"
+
+[workspace.dependencies]
+anyhow = "1.0.99"
+thiserror = "2.0.15"
+uuid = "1.22.0"
+chrono = "0.4.43"
+rstest = "0.26.0"
+async-trait="0.1.88"
