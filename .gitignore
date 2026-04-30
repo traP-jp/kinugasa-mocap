@@ -4,3 +4,6 @@ target
 node_modules
 treefmt.toml
 **/*.png
+poc/rist-streaming/.env
+poc/rist-streaming/.work
+poc/rist-streaming/out

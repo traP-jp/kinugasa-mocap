@@ -1,0 +1,170 @@
+name: kinugasa-rist-poc
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  livekit:
+    image: livekit/livekit-server:latest
+    command: [ "--config", "/etc/livekit.yaml" ]
+    depends_on:
+      - redis
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      - ./config/livekit.yaml:/etc/livekit.yaml:ro
+
+  ingress:
+    image: livekit/ingress:latest
+    depends_on:
+      - livekit
+      - redis
+    environment:
+      INGRESS_CONFIG_FILE: /etc/ingress.yaml
+    ports:
+      - "1935:1935"
+      - "8080:8080"
+      - "7885:7885/udp"
+    volumes:
+      - ./config/ingress.yaml:/etc/ingress.yaml:ro
+
+  minio:
+    image: minio/minio:latest
+    command: [ "server", "/data", "--console-address", ":9001" ]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-recordings}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
+          sleep 1
+        done
+        mc mb --ignore-existing "local/$$MINIO_BUCKET"
+
+  rist-server:
+    build:
+      context: ./ffmpeg
+    depends_on:
+      - ingress
+      - mediamtx
+      - minio-init
+    environment:
+      LIVEKIT_RTMP_URL: ${LIVEKIT_RTMP_URL:-rtmp://ingress:1935/live/REPLACE_WITH_STREAM_KEY}
+      RECORD_DIR: ${RECORD_DIR:-/recordings}
+      RIST_LISTEN_URL: ${RIST_LISTEN_URL:-rist://@0.0.0.0:9000}
+      SEGMENT_TIME: ${SEGMENT_TIME:-10}
+    ports:
+      - "${RIST_UDP_PORT:-9000}:9000/udp"
+    volumes:
+      - recordings:/recordings
+    command: [ "/usr/local/bin/rist-server.sh" ]
+    stop_grace_period: 45s
+    profiles:
+      - stream
+
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    ports:
+      - "${MEDIAMTX_RTMP_PORT:-1936}:1935"
+
+  recording-uploader:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+      - minio-init
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-recordings}
+      ROOM_NAME: ${ROOM_NAME:-rist-poc}
+      UPLOAD_SCAN_INTERVAL: ${UPLOAD_SCAN_INTERVAL:-2}
+      UPLOAD_SHUTDOWN_GRACE: ${UPLOAD_SHUTDOWN_GRACE:-30}
+      RECORD_DIR: ${RECORD_DIR:-/recordings}
+    volumes:
+      - recordings:/recordings:ro
+      - ./scripts/upload-complete-recordings.sh:/usr/local/bin/upload-complete-recordings.sh:ro
+    entrypoint: [ "/bin/sh", "/usr/local/bin/upload-complete-recordings.sh" ]
+    stop_grace_period: 45s
+    profiles:
+      - stream
+
+  camera-testsrc:
+    build:
+      context: ./ffmpeg
+    depends_on:
+      - rist-server
+    environment:
+      RIST_PUSH_URL: ${RIST_PUSH_URL:-rist://rist-server:9000}
+      RIST_VIDEO_CODEC: ${RIST_VIDEO_CODEC:-libx264}
+      RIST_H264_PROFILE: ${RIST_H264_PROFILE:-baseline}
+      RIST_H264_LEVEL: ${RIST_H264_LEVEL:-3.1}
+      RIST_VIDEO_BITRATE: ${RIST_VIDEO_BITRATE:-3000k}
+      RIST_GOP_SIZE: ${RIST_GOP_SIZE:-60}
+    command: [ "/usr/local/bin/camera-testsrc.sh" ]
+    profiles:
+      - camera
+
+  camera-v4l2:
+    build:
+      context: ./ffmpeg
+    depends_on:
+      - rist-server
+    devices:
+      - "${CAMERA_DEVICE:-/dev/video0}:${CAMERA_DEVICE:-/dev/video0}"
+    environment:
+      CAMERA_DEVICE: ${CAMERA_DEVICE:-/dev/video0}
+      CAMERA_SIZE: ${CAMERA_SIZE:-1280x720}
+      CAMERA_FPS: ${CAMERA_FPS:-30}
+      RIST_PUSH_URL: ${RIST_PUSH_URL:-rist://rist-server:9000}
+      RIST_VIDEO_CODEC: ${RIST_VIDEO_CODEC:-libx264}
+      RIST_H264_PROFILE: ${RIST_H264_PROFILE:-baseline}
+      RIST_H264_LEVEL: ${RIST_H264_LEVEL:-3.1}
+      RIST_VIDEO_BITRATE: ${RIST_VIDEO_BITRATE:-3000k}
+      RIST_GOP_SIZE: ${RIST_GOP_SIZE:-60}
+    command: [ "/usr/local/bin/camera-v4l2.sh" ]
+    profiles:
+      - camera-v4l2
+
+  viewer:
+    build:
+      context: ./viewer
+    ports:
+      - "${VIEWER_PORT:-3000}:8080"
+    command: [ "npm", "start", "--", "-a", "0.0.0.0" ]
+
+  lk:
+    image: livekit/livekit-cli:latest
+    profiles:
+      - tools
+    working_dir: /workspace
+    entrypoint: [ "/lk" ]
+    environment:
+      LIVEKIT_URL: http://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecretdevsecretdevsecretdevsecret}
+    volumes:
+      - .:/workspace:ro
+
+volumes:
+  minio-data:
+  recordings:

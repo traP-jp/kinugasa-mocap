@@ -1,0 +1,33 @@
+{
+  "input_type": "RTMP_INPUT",
+  "name": "rist-poc-rtmp",
+  "room_name": "rist-poc",
+  "participant_identity": "rist-bridge",
+  "participant_name": "RIST Bridge",
+  "enable_transcoding": true,
+  "video": {
+    "name": "camera",
+    "source": "CAMERA",
+    "options": {
+      "video_codec": "VP8",
+      "frame_rate": 30,
+      "layers": [
+        {
+          "quality": "HIGH",
+          "width": 1280,
+          "height": 720,
+          "bitrate": 2500000
+        }
+      ]
+    }
+  },
+  "audio": {
+    "name": "audio",
+    "source": "MICROPHONE",
+    "options": {
+      "audio_codec": "OPUS",
+      "bitrate": 96000,
+      "channels": 2
+    }
+  }
+}
