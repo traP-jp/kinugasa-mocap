@@ -1,0 +1,140 @@
+@startuml recording_console_db
+
+title kinugasa-mocap Recording Console Server Database Schema
+
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+
+' Copy this block when adding a new table.
+' entity "<table_name>" as table_name {
+'   * id : uuid <<PK>>
+'   --
+'   field : type
+'   created_at : timestamptz
+'   updated_at : timestamptz
+' }
+
+' Relationship notation:
+' parent ||--o{ child : owns
+' parent ||--|| child : has one
+' parent }o--o{ child : many to many
+
+entity "mocap_teams" as mocap_teams {
+    * id : uuid <<PK>>
+    --
+    external_usergroup_key : text
+    created_at : timestamptz
+    --
+    unique (external_usergroup_key)
+}
+
+note right of mocap_teams
+    Kinugasa does not manage users and groups.
+    Just use external user / group list such as traQ.
+end note
+
+entity "studios" as studios {
+    * id : uuid <<PK>>
+    --
+    team_id : uuid <<FK>>
+    name : text
+    status : text
+    last_event_sequence_number : bigint
+    created_at : timestamptz
+    updated_at : timestamptz
+    --
+    check (status in ('capturing', 'idle', 'closed'))
+}
+
+note right of studios
+    All events in studio are recorded in CQRS way, 
+    while the lifecycle of studio itself is not.
+end note
+
+entity "studio_events" as studio_events {
+    * id : uuid <<PK>>
+    --
+    studio_id : uuid <<FK>>
+    sequence_number : bigint
+    event_type : text
+    event_version : integer
+    payload : jsonb
+    created_at : timestamptz
+    --
+    unique (studio_id, sequence_number)
+    check (event_type in ('take_started', 'take_stopped', 'camera_created', 'camera_deleted'))
+}
+
+note right of studio_events
+    take_started event is 
+    also projected into videos.
+end note
+
+entity "cameras" as cameras {
+    * id : uuid <<PK>>
+    --
+    studio_id : uuid <<FK>>
+    name : text
+    status : text
+    rist_configuration : jsonb
+    created_at : timestamptz
+    updated_at : timestamptz
+    --
+    unique (studio_id, id)
+    check (status in ('capturing', 'idle', 'deleted'))
+}
+
+note right of cameras
+    cameras.status is just a logical projection
+    of studio_events.
+end note
+
+entity "takes" as takes {
+    * id : uuid <<PK>>
+    --
+    studio_id : uuid <<FK>>
+    take_number : integer
+    started_at : timestamptz
+    stopped_at : timestamptz?
+    created_at : timestamptz
+    updated_at : timestamptz
+    --
+    unique (studio_id, id)
+    unique (studio_id, take_number)
+}
+
+entity "videos" as videos {
+    * id : uuid <<PK>>
+    --
+    studio_id : uuid <<FK>>
+    take_id : uuid <<FK>>
+    camera_id : uuid <<FK>>
+    video_key : text
+    created_at : timestamptz
+    updated_at : timestamptz
+    --
+    foreign key (studio_id, take_id) references takes (studio_id, id)
+    foreign key (studio_id, camera_id) references cameras (studio_id, id)
+    unique (take_id, camera_id)
+}
+
+note right of videos
+    Videos are created when take_started.
+    Availability of videos (whether the
+    user can download or not) is not 
+    tracked by this database. It's cached
+    outside this database. 
+end note
+
+mocap_teams ||--o{ studios : owns
+studios ||--o{ studio_events : appends
+studios ||--o{ cameras : has
+studios ||--o{ takes : records
+takes ||--o{ videos : contains
+cameras ||--o{ videos : captured_by
+studio_events ..> cameras : projects
+studio_events ..> takes : projects
+studio_events ..> videos : projects
+
+@enduml
