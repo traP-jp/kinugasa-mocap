@@ -63,13 +63,24 @@ entity "studio_events" as studio_events {
     created_at : timestamptz
     --
     unique (studio_id, sequence_number)
-    check (event_type in ('take_started', 'take_stopped', 'camera_created', 'camera_deleted'))
+    check (event_type in ('take_started', 'take_completed', 'camera_created', 'camera_deleted'))
 }
 
 note right of studio_events
     take_started event is 
     also projected into videos.
 end note
+
+entity "studio_logs" as studio_logs {
+    * id : Uuid <<PK>>
+    --
+    studio_id : uuid <<FK>>
+    log_level : text
+    message : text
+    created_at : timestamptz
+    --
+    check (log_level in ('error', 'warn', 'info', 'debug', 'trace'))
+}
 
 entity "cameras" as cameras {
     * id : uuid <<PK>>
@@ -96,7 +107,7 @@ entity "takes" as takes {
     studio_id : uuid <<FK>>
     take_number : integer
     started_at : timestamptz
-    stopped_at : timestamptz?
+    completed_at : timestamptz?
     created_at : timestamptz
     updated_at : timestamptz
     --
@@ -131,6 +142,7 @@ mocap_teams ||--o{ studios : owns
 studios ||--o{ studio_events : appends
 studios ||--o{ cameras : has
 studios ||--o{ takes : records
+studios ||--o{ studio_logs : contains
 takes ||--o{ videos : contains
 cameras ||--o{ videos : captured_by
 studio_events ..> cameras : projects
