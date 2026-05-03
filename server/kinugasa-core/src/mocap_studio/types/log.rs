@@ -30,6 +30,7 @@ pub trait MocapStudioLogRepository {
     async fn get_logs_from(
         &self,
         studio_id: crate::id::MocapStudioId,
+        log_level: Option<LogLevel>,
         from: usize,
     ) -> anyhow::Result<LogSegment>;
 }
