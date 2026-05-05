@@ -2,9 +2,6 @@
 name = "librist"
 edition.workspace = true
 
-[dependencies]
-anyhow.workspace = true
-
 [build-dependencies]
 bindgen.workspace = true
 tempfile.workspace = true
