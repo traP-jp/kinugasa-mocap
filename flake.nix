@@ -12,6 +12,11 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    librist-src = {
+      url = "git+https://code.videolan.org/rist/librist.git";
+      flake = false;
+    };
+    systems.url = "github:nix-systems/default";
   };
 
   outputs =
@@ -20,12 +25,7 @@
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
-      ];
+      systems = import inputs.systems;
 
       imports = [
         ./docs
@@ -50,6 +50,10 @@
               treefmt
               cargo-tarpaulin
 
+              libclang.lib
+              meson
+              pkg-config
+              ninja
               # PlantUML
               graphviz
               plantuml
@@ -62,6 +66,8 @@
             shellHook = ''
               treefmt-sync
               export JAVA_HOME="${pkgs.jdk21}/lib/openjdk"
+              export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
+              export LIBRIST_SRC="${inputs.librist-src}"
             '';
           };
         };

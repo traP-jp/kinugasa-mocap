@@ -18,6 +18,22 @@
         "type": "github"
       }
     },
+    "librist-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1777088318,
+        "narHash": "sha256-Aywm+1CYUj/hmY44z+4TyVpEFyfQ1KekHMWlZDCbQL4=",
+        "ref": "refs/heads/master",
+        "rev": "91a88de284542ec0414e32e5b884ba33b3fd3b91",
+        "revCount": 1179,
+        "type": "git",
+        "url": "https://code.videolan.org/rist/librist.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://code.videolan.org/rist/librist.git"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1777268161,
@@ -52,8 +68,10 @@
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
+        "librist-src": "librist-src",
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay",
+        "systems": "systems",
         "treefmt-nix": "treefmt-nix"
       }
     },
@@ -74,6 +92,21 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
         "type": "github"
       }
     },
