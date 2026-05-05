@@ -278,7 +278,6 @@ dependencies = [
 name = "librist"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "bindgen",
  "tempfile",
 ]
