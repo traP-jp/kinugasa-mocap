@@ -19,4 +19,5 @@ jobs:
             - uses: DeterminateSystems/magic-nix-cache-action@main
               with:
                   use-gha-cache: true
+                  use-flakehub: false
             - run: nix run .#ci:treefmt:check
