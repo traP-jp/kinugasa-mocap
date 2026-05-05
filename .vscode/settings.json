@@ -1,4 +1,4 @@
 {
-    "editor.defaultFormatter": "ibecker.treefmt-vscode",
-    "nixEnvSelector.nixFile": "${workspaceFolder}/flake.nix"
+	"editor.defaultFormatter": "ibecker.treefmt-vscode",
+	"nixEnvSelector.nixFile": "${workspaceFolder}/flake.nix"
 }

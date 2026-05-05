@@ -48,7 +48,8 @@ fn main() {
 }
 
 fn load_path(env_var: &str) -> std::path::PathBuf {
-    std::path::PathBuf::from(std::env::var(env_var).unwrap_or_else(|_| {
-        panic!("{} environment variable is not set", env_var)
-    }))
+    std::path::PathBuf::from(
+        std::env::var(env_var)
+            .unwrap_or_else(|_| panic!("{} environment variable is not set", env_var)),
+    )
 }
