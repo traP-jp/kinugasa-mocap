@@ -1,0 +1,8 @@
+[package]
+name = "kinugasa-rist"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+kinugasa-core = { path = "../kinugasa-core" }
+librist = { path = "../librist" }
