@@ -1,0 +1,27 @@
+services:
+  test-of-protocol-e2e-success:
+    build:
+      context: ../..
+      dockerfile: tests/runtime.Dockerfile
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - target:/workspace/target
+    command:
+      - bash
+      - -c
+      - |
+        cargo run -p kinugasa-test-tools --bin protocol_e2e -- \
+          --duration 2 \
+          --startup-delay 1.5 \
+          --port 12345 \
+          --sender-url 'tcp://127.0.0.1:{port}' \
+          --receiver-url 'tcp://0.0.0.0:{port}?listen=1' \
+          --receiver 'ffmpeg -hide_banner -loglevel error -y -i {receiver_url} -t {duration} -c copy {output}'
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  target:

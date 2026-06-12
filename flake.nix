@@ -53,6 +53,7 @@
               libclang.lib
               meson
               pkg-config
+              ffmpeg
               ninja
               # PlantUML
               graphviz
