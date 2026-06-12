@@ -4,5 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 kinugasa-core = { path = "../kinugasa-core" }
 librist = { path = "../librist" }
+thiserror.workspace = true
