@@ -1,0 +1,34 @@
+services:
+  test-of-protocol-e2e-failure:
+    build:
+      context: ../..
+      dockerfile: tests/runtime.Dockerfile
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - target:/workspace/target
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        cargo build -p kinugasa-test-tools --bin protocol_e2e
+
+        if target/debug/protocol_e2e \
+          --duration 2 \
+          --port 12346 \
+          --sender-url 'udp://127.0.0.1:{port}?pkt_size=1316' \
+          --receiver 'ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=size=160x90:rate=30 -t {duration} -c:v mpeg2video -f mpegts {output}' \
+          --compare video; then
+          echo 'expected protocol_e2e to fail, but it passed' >&2
+          exit 1
+        fi
+
+        echo 'protocol_e2e failed as expected'
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  target:
