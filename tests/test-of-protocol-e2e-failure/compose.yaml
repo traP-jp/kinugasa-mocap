@@ -1,34 +1,73 @@
+x-runtime-image: &runtime-image
+  image: kinugasa-test-runtime
+  build:
+    context: ../..
+    dockerfile: tests/runtime.Dockerfile
+
 services:
-  test-of-protocol-e2e-failure:
-    build:
-      context: ../..
-      dockerfile: tests/runtime.Dockerfile
-    working_dir: /workspace
+  mismatched-output:
+    <<: *runtime-image
     volumes:
-      - ../..:/workspace
-      - cargo-registry:/usr/local/cargo/registry
-      - cargo-git:/usr/local/cargo/git
-      - target:/workspace/target
+      - artifacts:/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/output.ready"]
+      interval: 100ms
+      timeout: 1s
+      retries: 50
     command:
       - bash
       - -c
       - |
         set -euo pipefail
-        cargo build -p kinugasa-test-tools --bin protocol_e2e
+        rm -f /artifacts/receiver.done /artifacts/received.ts
+        touch /tmp/output.ready
+        ffmpeg \
+          -hide_banner \
+          -loglevel error \
+          -y \
+          -f lavfi \
+          -i 'testsrc2=size=320x180:rate=30,hue=h=90' \
+          -f lavfi \
+          -i sine=frequency=1000:sample_rate=48000 \
+          -t 2 \
+          -c:v mpeg2video \
+          -g 15 \
+          -bf 0 \
+          -c:a mp2 \
+          -b:a 128k \
+          -f mpegts \
+          /artifacts/received.ts
+        touch /artifacts/receiver.done
+        sleep 30
 
-        if target/debug/protocol_e2e \
+  test-of-protocol-e2e-failure:
+    <<: *runtime-image
+    depends_on:
+      mismatched-output:
+        condition: service_healthy
+    volumes:
+      - artifacts:/artifacts
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        if protocol_e2e \
           --duration 2 \
-          --port 12346 \
-          --sender-url 'udp://127.0.0.1:{port}?pkt_size=1316' \
-          --receiver 'ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=size=160x90:rate=30 -t {duration} -c:v mpeg2video -f mpegts {output}' \
-          --compare video; then
+          --startup-delay 0 \
+          --receiver-timeout 8 \
+          --skip-send \
+          --receiver-done /artifacts/receiver.done \
+          --output /artifacts/received.ts \
+          --compare video > /tmp/protocol_e2e.log 2>&1; then
+          cat /tmp/protocol_e2e.log
           echo 'expected protocol_e2e to fail, but it passed' >&2
           exit 1
         fi
 
+        cat /tmp/protocol_e2e.log
+        grep -q 'video fingerprint mismatch' /tmp/protocol_e2e.log
         echo 'protocol_e2e failed as expected'
 
 volumes:
-  cargo-registry:
-  cargo-git:
-  target:
+  artifacts:
