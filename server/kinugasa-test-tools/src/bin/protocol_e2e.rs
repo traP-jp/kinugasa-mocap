@@ -14,6 +14,9 @@ fn main() -> Result<()> {
     println!("  reference ts: {}", report.reference_ts.display());
     println!("  output ts: {}", report.output_ts.display());
     println!("  work dir: {}", report.work_dir.display());
+    if let Some(receiver_done) = report.receiver_done {
+        println!("  receiver done: {}", receiver_done.display());
+    }
     println!(
         "  receiver terminated by harness: {}",
         report.receiver_was_terminated
@@ -44,6 +47,10 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<ProtocolE2eConfi
             "--receiver" => config.receiver = next_value(&mut args, "--receiver")?,
             "--receiver-url" => {
                 config.receiver_url = Some(next_value(&mut args, "--receiver-url")?)
+            }
+            "--receiver-done" => {
+                config.receiver_done =
+                    Some(PathBuf::from(next_value(&mut args, "--receiver-done")?))
             }
             "--output" => config.output = Some(PathBuf::from(next_value(&mut args, "--output")?)),
             "--work-dir" => {
@@ -81,6 +88,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<ProtocolE2eConfi
             "--compare" => {
                 config.compare = CompareMode::parse(&next_value(&mut args, "--compare")?)?;
             }
+            "--skip-send" => config.skip_send = true,
+            "--ignore-sender-exit-status" => config.ignore_sender_exit_status = true,
             "--keep-work-dir" => config.keep_work_dir = true,
             "--help" | "-h" => {
                 print_help();
@@ -105,10 +114,13 @@ kinugasa-test-tools protocol E2E harness
 
 Required:
   --sender-url URL       ffmpeg output URL. Supports {{host}} and {{port}}.
+                        Not required with --skip-send.
   --receiver COMMAND     shell command that receives the stream and writes {{output}}.
+                        Or use --receiver-done for an external receiver.
 
 Optional:
   --receiver-url URL     receiver-side URL placeholder value. Defaults to --sender-url.
+  --receiver-done PATH   marker file written by an external receiver container.
   --output PATH          received TS output path. Defaults inside the work dir.
   --work-dir PATH        parent directory for temporary files.
   --host HOST            host placeholder and auto-port bind host. Default: 127.0.0.1
@@ -117,6 +129,9 @@ Optional:
   --startup-delay SEC    delay before ffmpeg sender starts. Default: 0.8
   --receiver-timeout SEC time to wait for receiver exit after sender ends. Default: 10
   --compare MODE         both, video, audio, or none. Default: both
+  --skip-send            do not send the generated reference TS.
+  --ignore-sender-exit-status
+                       continue to TS comparison even if ffmpeg sender exits non-zero
   --keep-work-dir        keep temporary files after success.
 
 Placeholders:

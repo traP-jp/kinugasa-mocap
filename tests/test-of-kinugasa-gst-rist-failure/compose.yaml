@@ -5,12 +5,12 @@ x-runtime-image: &runtime-image
     dockerfile: tests/runtime.Dockerfile
 
 services:
-  mismatched-output:
+  rist-receiver:
     <<: *runtime-image
     volumes:
       - artifacts:/artifacts
     healthcheck:
-      test: ["CMD-SHELL", "test -f /tmp/output.ready"]
+      test: ["CMD-SHELL", "test -f /tmp/receiver.ready"]
       interval: 100ms
       timeout: 1s
       retries: 50
@@ -20,7 +20,26 @@ services:
       - |
         set -euo pipefail
         rm -f /artifacts/receiver.done /artifacts/received.ts
-        touch /tmp/output.ready
+        touch /tmp/receiver.ready
+        rist_receive \
+          --url 'rist://@0.0.0.0:32100' \
+          --output /artifacts/received.ts \
+          --duration 7 \
+          --profile main
+        touch /artifacts/receiver.done
+        sleep 30
+
+  mismatched-sender:
+    <<: *runtime-image
+    depends_on:
+      rist-receiver:
+        condition: service_healthy
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        sleep 1.5
         ffmpeg \
           -hide_banner \
           -loglevel error \
@@ -36,15 +55,17 @@ services:
           -c:a mp2 \
           -b:a 128k \
           -f mpegts \
-          /artifacts/received.ts
-        touch /artifacts/receiver.done
+          -rist_profile main \
+          rist://rist-receiver:32100 || true
         sleep 30
 
-  test-of-protocol-e2e-failure:
+  test-of-kinugasa-gst-rist-failure:
     <<: *runtime-image
     depends_on:
-      mismatched-output:
+      rist-receiver:
         condition: service_healthy
+      mismatched-sender:
+        condition: service_started
     volumes:
       - artifacts:/artifacts
     command:
@@ -55,19 +76,19 @@ services:
         if protocol_e2e \
           --duration 2 \
           --startup-delay 0 \
-          --receiver-timeout 8 \
+          --receiver-timeout 12 \
           --skip-send \
           --receiver-done /artifacts/receiver.done \
           --output /artifacts/received.ts \
           --compare video > /tmp/protocol_e2e.log 2>&1; then
           cat /tmp/protocol_e2e.log
-          echo 'expected protocol_e2e to fail, but it passed' >&2
+          echo 'expected kinugasa-gst::rist E2E to fail, but it passed' >&2
           exit 1
         fi
 
         cat /tmp/protocol_e2e.log
         grep -q 'video fingerprint mismatch' /tmp/protocol_e2e.log
-        echo 'protocol_e2e failed as expected'
+        echo 'kinugasa-gst::rist E2E failed as expected'
 
 volumes:
   artifacts:

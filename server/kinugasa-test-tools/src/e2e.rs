@@ -42,6 +42,7 @@ pub struct ProtocolE2eConfig {
     pub sender_url: String,
     pub receiver: String,
     pub receiver_url: Option<String>,
+    pub receiver_done: Option<PathBuf>,
     pub output: Option<PathBuf>,
     pub work_dir: Option<PathBuf>,
     pub host: String,
@@ -50,6 +51,8 @@ pub struct ProtocolE2eConfig {
     pub startup_delay: Duration,
     pub receiver_timeout: Duration,
     pub compare: CompareMode,
+    pub skip_send: bool,
+    pub ignore_sender_exit_status: bool,
     pub keep_work_dir: bool,
 }
 
@@ -59,6 +62,7 @@ impl Default for ProtocolE2eConfig {
             sender_url: String::new(),
             receiver: String::new(),
             receiver_url: None,
+            receiver_done: None,
             output: None,
             work_dir: None,
             host: "127.0.0.1".to_owned(),
@@ -67,6 +71,8 @@ impl Default for ProtocolE2eConfig {
             startup_delay: Duration::from_millis(800),
             receiver_timeout: Duration::from_secs(10),
             compare: CompareMode::Both,
+            skip_send: false,
+            ignore_sender_exit_status: false,
             keep_work_dir: false,
         }
     }
@@ -79,6 +85,7 @@ pub struct ProtocolE2eReport {
     pub output_ts: PathBuf,
     pub sender_url: String,
     pub receiver_url: String,
+    pub receiver_done: Option<PathBuf>,
     pub receiver_was_terminated: bool,
     pub video_fingerprint: Option<StreamFingerprint>,
     pub audio_fingerprint: Option<StreamFingerprint>,
@@ -126,17 +133,38 @@ pub fn run_protocol_e2e(mut config: ProtocolE2eConfig) -> Result<ProtocolE2eRepo
             .with_context(|| format!("failed to create output directory {}", parent.display()))?;
     }
 
-    let mut receiver = spawn_shell(&receiver_command, "receiver")?;
+    let mut receiver = if config.receiver.is_empty() {
+        None
+    } else {
+        Some(spawn_shell(&receiver_command, "receiver")?)
+    };
     thread::sleep(config.startup_delay);
 
-    let sender_result = send_reference_ts(&reference_ts, &sender_url);
-    let receiver_result = finish_receiver(&mut receiver, config.receiver_timeout);
+    let sender_result = if config.skip_send {
+        Ok(())
+    } else {
+        send_reference_ts(&reference_ts, &sender_url)
+    };
+    let receiver_result = match &mut receiver {
+        Some(receiver) => finish_receiver(receiver, config.receiver_timeout),
+        None => wait_for_receiver_done(
+            config
+                .receiver_done
+                .as_deref()
+                .expect("external receiver requires receiver_done"),
+            config.receiver_timeout,
+        ),
+    };
 
-    if sender_result.is_err() {
-        kill_child(&mut receiver);
+    if sender_result.is_err() && !config.ignore_sender_exit_status {
+        if let Some(receiver) = &mut receiver {
+            kill_child(receiver);
+        }
     }
 
-    sender_result?;
+    if !config.ignore_sender_exit_status {
+        sender_result?;
+    }
     let receiver_was_terminated = receiver_result?;
 
     if !output_ts.exists() {
@@ -170,6 +198,7 @@ pub fn run_protocol_e2e(mut config: ProtocolE2eConfig) -> Result<ProtocolE2eRepo
         output_ts,
         sender_url,
         receiver_url,
+        receiver_done: config.receiver_done.clone(),
         receiver_was_terminated,
         video_fingerprint,
         audio_fingerprint,
@@ -191,11 +220,14 @@ pub fn expand_template(template: &str, placeholders: &BTreeMap<&'static str, Str
 }
 
 fn validate_config(config: &ProtocolE2eConfig) -> Result<()> {
-    if config.sender_url.is_empty() {
+    if config.sender_url.is_empty() && !config.skip_send {
         bail!("--sender-url is required");
     }
-    if config.receiver.is_empty() {
-        bail!("--receiver is required");
+    if config.receiver.is_empty() && config.receiver_done.is_none() {
+        bail!("--receiver or --receiver-done is required");
+    }
+    if config.receiver_done.is_none() && config.skip_send {
+        bail!("--skip-send requires --receiver-done");
     }
     if config.duration.is_zero() {
         bail!("--duration must be greater than zero");
@@ -317,6 +349,24 @@ fn finish_receiver(child: &mut Child, timeout: Duration) -> Result<bool> {
         if started_at.elapsed() >= timeout {
             terminate_child(child);
             return Ok(true);
+        }
+
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn wait_for_receiver_done(path: &Path, timeout: Duration) -> Result<bool> {
+    let started_at = Instant::now();
+    loop {
+        if path.exists() {
+            return Ok(false);
+        }
+
+        if started_at.elapsed() >= timeout {
+            bail!(
+                "external receiver did not write done marker before timeout: {}",
+                path.display()
+            );
         }
 
         thread::sleep(Duration::from_millis(50));

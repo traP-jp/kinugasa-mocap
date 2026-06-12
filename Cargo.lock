@@ -248,8 +248,10 @@ dependencies = [
 name = "kinugasa-gst"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "kinugasa-core",
  "librist",
+ "thiserror",
 ]
 
 [[package]]

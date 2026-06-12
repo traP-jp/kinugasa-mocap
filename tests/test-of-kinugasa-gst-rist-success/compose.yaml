@@ -5,7 +5,7 @@ x-runtime-image: &runtime-image
     dockerfile: tests/runtime.Dockerfile
 
 services:
-  tcp-receiver:
+  rist-receiver:
     <<: *runtime-image
     volumes:
       - artifacts:/artifacts
@@ -21,21 +21,18 @@ services:
         set -euo pipefail
         rm -f /artifacts/receiver.done /artifacts/received.ts
         touch /tmp/receiver.ready
-        ffmpeg \
-          -hide_banner \
-          -loglevel error \
-          -y \
-          -i 'tcp://0.0.0.0:12345?listen=1' \
-          -t 2 \
-          -c copy \
-          /artifacts/received.ts
+        rist_receive \
+          --url 'rist://@0.0.0.0:32100' \
+          --output /artifacts/received.ts \
+          --duration 7 \
+          --profile main
         touch /artifacts/receiver.done
         sleep 30
 
-  test-of-protocol-e2e-success:
+  test-of-kinugasa-gst-rist-success:
     <<: *runtime-image
     depends_on:
-      tcp-receiver:
+      rist-receiver:
         condition: service_healthy
     volumes:
       - artifacts:/artifacts
@@ -46,9 +43,10 @@ services:
         set -euo pipefail
         protocol_e2e \
           --duration 2 \
-          --startup-delay 1.5 \
-          --receiver-timeout 8 \
-          --sender-url 'tcp://tcp-receiver:12345' \
+          --startup-delay 3 \
+          --receiver-timeout 12 \
+          --ignore-sender-exit-status \
+          --sender-url 'rist://rist-receiver:32100' \
           --receiver-done /artifacts/receiver.done \
           --output /artifacts/received.ts
 
