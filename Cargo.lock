@@ -245,7 +245,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kinugasa-rist"
+name = "kinugasa-gst"
 version = "0.1.0"
 dependencies = [
  "kinugasa-core",
