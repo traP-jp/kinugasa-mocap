@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::fs::{File, OpenOptions};
 use std::path::Path;
-use std::ptr;
+use std::ptr::{self, NonNull};
 use std::time::{Duration, Instant};
 use std::{io::Write, slice};
 
@@ -26,6 +26,8 @@ pub enum Error {
     },
     #[error("failed to write RIST payload")]
     WriteOutput(#[source] std::io::Error),
+    #[error("invalid RIST data block: {reason}")]
+    InvalidDataBlock { reason: &'static str },
     #[error("librist call failed: {operation}")]
     Librist { operation: &'static str },
 }
@@ -89,7 +91,7 @@ impl FileReceiver {
         while Instant::now() < deadline {
             if let Some(block) = self.context.read(Duration::from_millis(50))? {
                 output
-                    .write_all(block.payload())
+                    .write_all(block.payload()?)
                     .map_err(Error::WriteOutput)?;
             }
         }
@@ -171,7 +173,7 @@ impl ReceiverContext {
         if raw.is_null() {
             return Ok(None);
         }
-        Ok(Some(DataBlock { raw }))
+        Ok(Some(DataBlock::new(raw)?))
     }
 
     fn stats(&self) -> Result<DataFdStats> {
@@ -194,27 +196,43 @@ impl ReceiverContext {
 }
 
 struct DataBlock {
-    raw: *mut rist_data_block,
+    raw: NonNull<rist_data_block>,
 }
 
 impl DataBlock {
-    fn payload(&self) -> &[u8] {
-        // SAFETY: librist gives a valid payload pointer and length for the
-        // lifetime of the data block. The block is freed in Drop after use.
-        unsafe {
-            let block = &*self.raw;
-            slice::from_raw_parts(block.payload.cast::<u8>(), block.payload_len)
+    fn new(raw: *mut rist_data_block) -> Result<Self> {
+        let raw = NonNull::new(raw).ok_or(Error::InvalidDataBlock {
+            reason: "librist returned a null data block",
+        })?;
+        Ok(Self { raw })
+    }
+
+    fn payload(&self) -> Result<&[u8]> {
+        // SAFETY: `raw` is a non-null block returned by librist and owned by
+        // this wrapper until Drop calls `rist_receiver_data_block_free2`.
+        let block = unsafe { self.raw.as_ref() };
+        if block.payload_len == 0 {
+            return Ok(&[]);
         }
+
+        let payload =
+            NonNull::new(block.payload.cast_mut().cast::<u8>()).ok_or(Error::InvalidDataBlock {
+                reason: "librist returned a null payload for a non-empty data block",
+            })?;
+
+        // SAFETY: librist guarantees the payload pointer and length are valid
+        // for the lifetime of this data block.
+        Ok(unsafe { slice::from_raw_parts(payload.as_ptr(), block.payload_len) })
     }
 }
 
 impl Drop for DataBlock {
     fn drop(&mut self) {
-        if !self.raw.is_null() {
-            // SAFETY: `raw` is an owned librist data block returned by read2.
-            unsafe {
-                rist_receiver_data_block_free2(&mut self.raw);
-            }
+        let mut raw = self.raw.as_ptr();
+        // SAFETY: `raw` is an owned librist data block returned by read2 and is
+        // freed exactly once by this RAII wrapper.
+        unsafe {
+            rist_receiver_data_block_free2(&mut raw);
         }
     }
 }
