@@ -1,0 +1,1240 @@
+openapi: 3.1.0
+info:
+  title: Kinugasa Recording Console API
+  version: 0.1.0
+  description: |
+    REST API for the Kinugasa recording console server.
+
+    This API exposes mocap teams, studios, recording state projections, studio
+    events, and logs. The schema follows the database model in
+    docs/architecture/recording_console_db.puml and the current kinugasa-core
+    domain model.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+tags:
+  - name: Health
+  - name: MocapTeams
+  - name: Studios
+  - name: Cameras
+  - name: Takes
+  - name: Videos
+  - name: Events
+  - name: Logs
+paths:
+  /healthz:
+    get:
+      tags:
+        - Health
+      operationId: getHealth
+      summary: Health check
+      responses:
+        "200":
+          description: The service is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /mocap-teams:
+    get:
+      tags:
+        - MocapTeams
+      operationId: listMocapTeams
+      summary: List mocap teams
+      responses:
+        "200":
+          description: Mocap teams.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MocapTeam"
+    post:
+      tags:
+        - MocapTeams
+      operationId: createMocapTeam
+      summary: Create a mocap team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMocapTeamRequest"
+      responses:
+        "201":
+          description: The mocap team was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MocapTeam"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /mocap-teams/by-external-usergroup-key/{externalUsergroupKey}:
+    get:
+      tags:
+        - MocapTeams
+      operationId: getMocapTeamByExternalUsergroupKey
+      summary: Get a mocap team by external user group key
+      parameters:
+        - $ref: "#/components/parameters/ExternalUsergroupKey"
+      responses:
+        "200":
+          description: The matching mocap team.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MocapTeam"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /mocap-teams/{teamId}:
+    get:
+      tags:
+        - MocapTeams
+      operationId: getMocapTeam
+      summary: Get a mocap team
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "200":
+          description: The mocap team.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MocapTeam"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags:
+        - MocapTeams
+      operationId: updateMocapTeam
+      summary: Update a mocap team
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMocapTeamRequest"
+      responses:
+        "200":
+          description: The mocap team was updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MocapTeam"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /mocap-teams/{teamId}/studios:
+    get:
+      tags:
+        - Studios
+      operationId: listMocapStudiosByTeam
+      summary: List studios owned by a mocap team
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "200":
+          description: Mocap studios.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MocapStudio"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Studios
+      operationId: createMocapStudio
+      summary: Create a studio for a mocap team
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMocapStudioRequest"
+      responses:
+        "201":
+          description: The mocap studio was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MocapStudio"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /studios/{studioId}:
+    get:
+      tags:
+        - Studios
+      operationId: getMocapStudio
+      summary: Get a studio
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      responses:
+        "200":
+          description: The mocap studio.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MocapStudio"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags:
+        - Studios
+      operationId: updateMocapStudio
+      summary: Update a studio
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMocapStudioRequest"
+      responses:
+        "200":
+          description: The mocap studio was updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MocapStudio"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /studios/{studioId}/state:
+    get:
+      tags:
+        - Studios
+      operationId: getMocapStudioState
+      summary: Get the projected recording state of a studio
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      responses:
+        "200":
+          description: The projected studio state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MocapStudioState"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /studios/{studioId}/cameras:
+    get:
+      tags:
+        - Cameras
+      operationId: listCameras
+      summary: List cameras in a studio
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - name: include_deleted
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Cameras.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Camera"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Cameras
+      operationId: createCamera
+      summary: Create a camera in a studio
+      description: Appends a camera_created studio event and updates projections.
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCameraRequest"
+      responses:
+        "201":
+          description: The camera was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Camera"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /studios/{studioId}/cameras/{cameraId}:
+    get:
+      tags:
+        - Cameras
+      operationId: getCamera
+      summary: Get a camera
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - $ref: "#/components/parameters/CameraId"
+      responses:
+        "200":
+          description: The camera.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Camera"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags:
+        - Cameras
+      operationId: deleteCamera
+      summary: Delete a camera
+      description: Appends a camera_deleted studio event and updates projections.
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - $ref: "#/components/parameters/CameraId"
+      responses:
+        "200":
+          description: The camera was marked as deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Camera"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /studios/{studioId}/takes:
+    get:
+      tags:
+        - Takes
+      operationId: listTakes
+      summary: List takes in a studio
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TakeStatus"
+      responses:
+        "200":
+          description: Takes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Take"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Takes
+      operationId: startTake
+      summary: Start a take
+      description: Appends a take_started studio event and creates video projections.
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartTakeRequest"
+      responses:
+        "201":
+          description: The take was started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Take"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /studios/{studioId}/takes/ongoing:
+    get:
+      tags:
+        - Takes
+      operationId: getOngoingTake
+      summary: Get the ongoing take
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      responses:
+        "200":
+          description: The ongoing take.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Take"
+        "204":
+          description: No take is currently ongoing.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /studios/{studioId}/takes/{takeId}:
+    get:
+      tags:
+        - Takes
+      operationId: getTake
+      summary: Get a take
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - $ref: "#/components/parameters/TakeId"
+      responses:
+        "200":
+          description: The take.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Take"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /studios/{studioId}/takes/{takeId}/complete:
+    post:
+      tags:
+        - Takes
+      operationId: completeTake
+      summary: Complete a take
+      description: Appends a take_completed studio event and updates projections.
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - $ref: "#/components/parameters/TakeId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteTakeRequest"
+      responses:
+        "200":
+          description: The take was completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Take"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /studios/{studioId}/takes/{takeId}/videos:
+    get:
+      tags:
+        - Videos
+      operationId: listVideosByTake
+      summary: List videos for a take
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - $ref: "#/components/parameters/TakeId"
+      responses:
+        "200":
+          description: Videos.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Video"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /studios/{studioId}/videos/{videoId}:
+    get:
+      tags:
+        - Videos
+      operationId: getVideo
+      summary: Get a video
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - $ref: "#/components/parameters/VideoId"
+      responses:
+        "200":
+          description: The video.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Video"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /studios/{studioId}/events:
+    get:
+      tags:
+        - Events
+      operationId: listStudioEvents
+      summary: List studio events from a sequence number
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - name: from_sequence_number
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Studio events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StudioEvent"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Events
+      operationId: appendStudioEvent
+      summary: Append a studio event
+      description: Low-level event append endpoint for reconcilers and tests.
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppendStudioEventRequest"
+      responses:
+        "201":
+          description: The studio event was appended.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioEvent"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /studios/{studioId}/events/{sequenceNumber}:
+    get:
+      tags:
+        - Events
+      operationId: getStudioEvent
+      summary: Get a studio event by sequence number
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - $ref: "#/components/parameters/SequenceNumber"
+      responses:
+        "200":
+          description: The studio event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioEvent"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /studios/{studioId}/logs:
+    get:
+      tags:
+        - Logs
+      operationId: getStudioLogs
+      summary: Get studio logs from an index
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+        - name: level
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/LogLevel"
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: A segment of studio logs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogSegment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Logs
+      operationId: appendStudioLog
+      summary: Append a studio log
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppendStudioLogRequest"
+      responses:
+        "201":
+          description: The studio log was appended.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioLog"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+components:
+  parameters:
+    CameraId:
+      name: cameraId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    ExternalUsergroupKey:
+      name: externalUsergroupKey
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    SequenceNumber:
+      name: sequenceNumber
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 0
+    StudioId:
+      name: studioId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    TakeId:
+      name: takeId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    TeamId:
+      name: teamId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    VideoId:
+      name: videoId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Uuid"
+
+  responses:
+    Conflict:
+      description: The request conflicts with the current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: The requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ValidationError:
+      description: The request body or parameters are invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    AppendStudioEventRequest:
+      type: object
+      required:
+        - expected_sequence_number
+        - event_type
+        - event_version
+        - payload
+      properties:
+        expected_sequence_number:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The sequence number to assign to the new event.
+        event_type:
+          $ref: "#/components/schemas/StudioEventType"
+        event_version:
+          type: integer
+          minimum: 0
+          const: 0
+        payload:
+          $ref: "#/components/schemas/StudioEventPayload"
+      additionalProperties: false
+
+    AppendStudioLogRequest:
+      type: object
+      required:
+        - level
+        - message
+      properties:
+        level:
+          $ref: "#/components/schemas/LogLevel"
+        message:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    Camera:
+      type: object
+      required:
+        - id
+        - studio_id
+        - name
+        - status
+        - rist_configuration
+        - created_at
+        - updated_at
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        studio_id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/CameraStatus"
+        rist_configuration:
+          $ref: "#/components/schemas/RistConfiguration"
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "#/components/schemas/Timestamp"
+
+    CameraCreatedEventPayloadV0:
+      type: object
+      required:
+        - id
+        - name
+        - rist_url
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 1
+        rist_url:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    CameraDeletedEventPayloadV0:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+      additionalProperties: false
+
+    CameraStatus:
+      type: string
+      enum:
+        - capturing
+        - idle
+        - deleted
+
+    CompleteTakeRequest:
+      type: object
+      properties:
+        completed_at:
+          $ref: "#/components/schemas/Timestamp"
+      additionalProperties: false
+
+    CreateCameraRequest:
+      type: object
+      required:
+        - name
+        - rist_url
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 1
+        rist_url:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    CreateMocapStudioRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    CreateMocapTeamRequest:
+      type: object
+      required:
+        - external_usergroup_key
+      properties:
+        external_usergroup_key:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
+
+    Health:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+      additionalProperties: false
+
+    LogLevel:
+      type: string
+      enum:
+        - error
+        - warn
+        - info
+        - debug
+        - trace
+
+    LogSegment:
+      type: object
+      required:
+        - top_index
+        - length
+        - logs
+      properties:
+        top_index:
+          type: integer
+          minimum: 0
+        length:
+          type: integer
+          minimum: 0
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudioLog"
+
+    MocapStudio:
+      type: object
+      required:
+        - id
+        - team_id
+        - name
+        - status
+        - last_event_sequence_number
+        - created_at
+        - updated_at
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        team_id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/MocapStudioStatus"
+        last_event_sequence_number:
+          type: integer
+          format: int64
+          minimum: 0
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "#/components/schemas/Timestamp"
+
+    MocapStudioState:
+      type: object
+      required:
+        - cameras
+        - completed_takes
+        - ongoing_take
+      properties:
+        cameras:
+          type: array
+          items:
+            $ref: "#/components/schemas/Camera"
+        completed_takes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Take"
+        ongoing_take:
+          anyOf:
+            - $ref: "#/components/schemas/Take"
+            - type: "null"
+
+    MocapStudioStatus:
+      type: string
+      enum:
+        - capturing
+        - idle
+        - closed
+
+    MocapTeam:
+      type: object
+      required:
+        - id
+        - external_usergroup_key
+        - created_at
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        external_usergroup_key:
+          type: string
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+
+    RistConfiguration:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    StartTakeRequest:
+      type: object
+      required:
+        - take_number
+        - videos
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        take_number:
+          type: integer
+          format: int32
+          minimum: 1
+        started_at:
+          $ref: "#/components/schemas/Timestamp"
+        videos:
+          type: array
+          minItems: 0
+          items:
+            $ref: "#/components/schemas/StartTakeVideoRequest"
+      additionalProperties: false
+
+    StartTakeVideoRequest:
+      type: object
+      required:
+        - camera_id
+        - video_key
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        camera_id:
+          $ref: "#/components/schemas/Uuid"
+        video_key:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    StudioEvent:
+      type: object
+      required:
+        - id
+        - studio_id
+        - sequence_number
+        - event_type
+        - event_version
+        - payload
+        - created_at
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        studio_id:
+          $ref: "#/components/schemas/Uuid"
+        sequence_number:
+          type: integer
+          format: int64
+          minimum: 0
+        event_type:
+          $ref: "#/components/schemas/StudioEventType"
+        event_version:
+          type: integer
+          minimum: 0
+        payload:
+          $ref: "#/components/schemas/StudioEventPayload"
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+
+    StudioEventPayload:
+      oneOf:
+        - $ref: "#/components/schemas/CameraCreatedEventPayloadV0"
+        - $ref: "#/components/schemas/CameraDeletedEventPayloadV0"
+        - $ref: "#/components/schemas/TakeStartedEventPayloadV0"
+        - $ref: "#/components/schemas/TakeCompletedEventPayloadV0"
+
+    StudioEventType:
+      type: string
+      enum:
+        - camera_created
+        - camera_deleted
+        - take_started
+        - take_completed
+
+    StudioLog:
+      type: object
+      required:
+        - id
+        - studio_id
+        - level
+        - message
+        - created_at
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        studio_id:
+          $ref: "#/components/schemas/Uuid"
+        level:
+          $ref: "#/components/schemas/LogLevel"
+        message:
+          type: string
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+
+    Take:
+      type: object
+      required:
+        - id
+        - studio_id
+        - take_number
+        - status
+        - started_at
+        - completed_at
+        - videos
+        - created_at
+        - updated_at
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        studio_id:
+          $ref: "#/components/schemas/Uuid"
+        take_number:
+          type: integer
+          format: int32
+          minimum: 1
+        status:
+          $ref: "#/components/schemas/TakeStatus"
+        started_at:
+          $ref: "#/components/schemas/Timestamp"
+        completed_at:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        videos:
+          type: array
+          items:
+            $ref: "#/components/schemas/Video"
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "#/components/schemas/Timestamp"
+
+    TakeCompletedEventPayloadV0:
+      type: object
+      required:
+        - id
+        - completed_at
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        completed_at:
+          $ref: "#/components/schemas/Timestamp"
+      additionalProperties: false
+
+    TakeStartedEventPayloadV0:
+      type: object
+      required:
+        - id
+        - take_number
+        - started_at
+        - video_keys
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        take_number:
+          type: integer
+          format: int32
+          minimum: 1
+        started_at:
+          $ref: "#/components/schemas/Timestamp"
+        video_keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/TakeStartedEventVideoV0"
+      additionalProperties: false
+
+    TakeStartedEventVideoV0:
+      type: object
+      required:
+        - id
+        - camera_id
+        - video_key
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        camera_id:
+          $ref: "#/components/schemas/Uuid"
+        video_key:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    TakeStatus:
+      type: string
+      enum:
+        - ongoing
+        - completed
+
+    Timestamp:
+      type: string
+      format: date-time
+
+    UpdateMocapStudioRequest:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/MocapStudioStatus"
+        last_event_sequence_number:
+          type: integer
+          format: int64
+          minimum: 0
+      additionalProperties: false
+
+    UpdateMocapTeamRequest:
+      type: object
+      properties:
+        external_usergroup_key:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    Uuid:
+      type: string
+      format: uuid
+
+    Video:
+      type: object
+      required:
+        - id
+        - studio_id
+        - take_id
+        - camera_id
+        - video_key
+        - created_at
+        - updated_at
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        studio_id:
+          $ref: "#/components/schemas/Uuid"
+        take_id:
+          $ref: "#/components/schemas/Uuid"
+        camera_id:
+          $ref: "#/components/schemas/Uuid"
+        video_key:
+          type: string
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "#/components/schemas/Timestamp"
