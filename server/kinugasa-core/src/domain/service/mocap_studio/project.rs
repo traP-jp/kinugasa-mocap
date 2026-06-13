@@ -21,29 +21,150 @@ pub fn project(
 }
 
 pub fn project_camera_created(
-    _prev: state::MocapStudio,
-    _transition: event::CameraCreatedEventLatest,
+    mut prev: state::MocapStudio,
+    transition: event::CameraCreatedEventLatest,
 ) -> state::MocapStudio {
-    unimplemented!()
+    prev.cameras.insert(
+        transition.id,
+        state::Camera {
+            name: transition.name,
+            rist_url: transition.rist_url,
+        },
+    );
+    prev
 }
 
 pub fn project_camera_deleted(
-    _prev: state::MocapStudio,
-    _transition: event::CameraDeletedEventLatest,
+    mut prev: state::MocapStudio,
+    transition: event::CameraDeletedEventLatest,
 ) -> state::MocapStudio {
-    unimplemented!()
+    prev.cameras.remove(&transition.id);
+    prev
 }
 
 pub fn project_take_started(
-    _prev: state::MocapStudio,
-    _transition: event::TakeStartedEventLatest,
+    mut prev: state::MocapStudio,
+    transition: event::TakeStartedEventLatest,
 ) -> state::MocapStudio {
-    unimplemented!()
+    let videos = transition
+        .video_keys
+        .into_iter()
+        .map(|video| {
+            (
+                video.id,
+                state::Video {
+                    camera_id: video.camera_id,
+                    video_key: video.video_key,
+                },
+            )
+        })
+        .collect();
+
+    prev.ongoing_take = Some((transition.id, state::Take { videos }));
+    prev
 }
 
 pub fn project_take_completed(
-    _prev: state::MocapStudio,
-    _transition: event::TakeCompletedEventLatest,
+    mut prev: state::MocapStudio,
+    transition: event::TakeCompletedEventLatest,
 ) -> state::MocapStudio {
-    unimplemented!()
+    if let Some((take_id, take)) = prev.ongoing_take.take() {
+        if take_id == transition.id {
+            prev.completed_takes.insert(take_id, take);
+        } else {
+            prev.ongoing_take = Some((take_id, take));
+        }
+    }
+
+    prev
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::model::id;
+
+    #[test]
+    fn projects_camera_lifecycle() {
+        let camera_id = id::CameraId(uuid::Uuid::from_u128(1));
+        let state = state::MocapStudio::default();
+
+        let state = project_camera_created(
+            state,
+            event::CameraCreatedEventLatest {
+                id: camera_id,
+                name: "main".to_string(),
+                rist_url: "rist://main".to_string(),
+            },
+        );
+
+        assert_eq!(
+            state.cameras.get(&camera_id),
+            Some(&state::Camera {
+                name: "main".to_string(),
+                rist_url: "rist://main".to_string(),
+            })
+        );
+
+        let state =
+            project_camera_deleted(state, event::CameraDeletedEventLatest { id: camera_id });
+
+        assert!(!state.cameras.contains_key(&camera_id));
+    }
+
+    #[test]
+    fn projects_take_lifecycle() {
+        let camera_id = id::CameraId(uuid::Uuid::from_u128(1));
+        let take_id = id::TakeId(uuid::Uuid::from_u128(2));
+        let video_id = id::VideoId(uuid::Uuid::from_u128(3));
+        let state = state::MocapStudio::default();
+
+        let state = project_take_started(
+            state,
+            event::TakeStartedEventLatest {
+                id: take_id,
+                video_keys: vec![event::take_started_v0::TakeStartedEventV0Video {
+                    id: video_id,
+                    camera_id,
+                    video_key: "videos/take-1-main.mp4".to_string(),
+                }],
+            },
+        );
+
+        let (_, ongoing_take) = state
+            .ongoing_take
+            .as_ref()
+            .expect("started take should be ongoing");
+        assert_eq!(
+            ongoing_take.videos.get(&video_id),
+            Some(&state::Video {
+                camera_id,
+                video_key: "videos/take-1-main.mp4".to_string(),
+            })
+        );
+
+        let state = project_take_completed(state, event::TakeCompletedEventLatest { id: take_id });
+
+        assert!(state.ongoing_take.is_none());
+        assert!(state.completed_takes.contains_key(&take_id));
+    }
+
+    #[test]
+    fn ignores_take_completion_for_a_different_ongoing_take() {
+        let take_id = id::TakeId(uuid::Uuid::from_u128(1));
+        let other_take_id = id::TakeId(uuid::Uuid::from_u128(2));
+        let mut state = state::MocapStudio::default();
+        state.ongoing_take = Some((
+            take_id,
+            state::Take {
+                videos: std::collections::HashMap::new(),
+            },
+        ));
+
+        let state =
+            project_take_completed(state, event::TakeCompletedEventLatest { id: other_take_id });
+
+        assert_eq!(state.ongoing_take.map(|(id, _)| id), Some(take_id));
+        assert!(!state.completed_takes.contains_key(&other_take_id));
+    }
 }

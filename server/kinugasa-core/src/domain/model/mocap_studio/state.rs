@@ -1,17 +1,27 @@
 use crate::domain::model::id;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MocapStudio {
-    pub cameras: std::collections::HashMap<id::CameraId, Camera>,
-    pub completed_takes: std::collections::HashMap<id::TakeId, Take>,
+    pub cameras: HashMap<id::CameraId, Camera>,
+    pub completed_takes: HashMap<id::TakeId, Take>,
     pub ongoing_take: Option<(id::TakeId, Take)>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Camera {}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Camera {
+    pub name: String,
+    pub rist_url: String,
+}
 
-#[derive(Debug, Clone)]
-pub struct Take {}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Take {
+    pub videos: HashMap<id::VideoId, Video>,
+}
 
-#[derive(Debug, Clone)]
-pub struct Video {}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Video {
+    pub camera_id: id::CameraId,
+    pub video_key: String,
+}
+
+type HashMap<K, V> = std::collections::HashMap<K, V>;
