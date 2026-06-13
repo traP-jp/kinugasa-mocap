@@ -24,3 +24,5 @@ sqlx = { version = "0.8.6", default-features = false, features = [
 ] }
 bindgen = "0.72.1"
 tempfile = "3.27.0"
+gst = { package = "gstreamer", version = "0.25.2" }
+gst_base = { package = "gstreamer-base", version = "0.25.2" }

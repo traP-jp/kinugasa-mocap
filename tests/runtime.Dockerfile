@@ -7,6 +7,8 @@ RUN apt-get update \
         ca-certificates \
         clang \
         git \
+        libgstreamer1.0-dev \
+        libgstreamer-plugins-base1.0-dev \
         libclang-dev \
         meson \
         ninja-build \
@@ -30,6 +32,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         ffmpeg \
+        gstreamer1.0-plugins-base \
+        libgstreamer1.0-0 \
+        libgstreamer-plugins-base1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/target/debug/protocol_e2e /usr/local/bin/protocol_e2e
