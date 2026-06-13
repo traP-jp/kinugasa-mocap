@@ -1,0 +1,70 @@
+x-runtime-image: &runtime-image
+  image: kinugasa-test-runtime
+  build:
+    context: ../..
+    dockerfile: tests/runtime.Dockerfile
+
+services:
+  srt-receiver:
+    <<: *runtime-image
+    volumes:
+      - artifacts:/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/receiver.ready"]
+      interval: 100ms
+      timeout: 1s
+      retries: 50
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        rm -f /artifacts/receiver.done /artifacts/received.ts
+        touch /tmp/receiver.ready
+        srt_receive \
+          --url 'srt://0.0.0.0:32110?mode=listener' \
+          --stream-id kinugasa-main \
+          --output /artifacts/received.ts \
+          --duration 7
+        touch /artifacts/receiver.done
+        sleep 30
+
+  test-of-kinugasa-gst-srt-success:
+    <<: *runtime-image
+    depends_on:
+      srt-receiver:
+        condition: service_healthy
+    volumes:
+      - artifacts:/artifacts
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        protocol_e2e \
+          --duration 2 \
+          --startup-delay 3 \
+          --receiver-timeout 12 \
+          --ignore-sender-exit-status \
+          --sender-url 'srt://srt-receiver:32110?mode=caller&streamid=kinugasa-main' \
+          --receiver-done /artifacts/receiver.done \
+          --output /artifacts/received.ts \
+          --compare none
+        test -s /artifacts/received.ts
+        ffprobe \
+          -hide_banner \
+          -loglevel error \
+          -select_streams v:0 \
+          -show_entries stream=codec_name \
+          -of csv=p=0 \
+          /artifacts/received.ts | grep -q '^mpeg2video'
+        ffprobe \
+          -hide_banner \
+          -loglevel error \
+          -select_streams a:0 \
+          -show_entries stream=codec_name \
+          -of csv=p=0 \
+          /artifacts/received.ts | grep -q '^mp2$'
+
+volumes:
+  artifacts:

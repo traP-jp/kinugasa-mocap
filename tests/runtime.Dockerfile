@@ -24,7 +24,8 @@ COPY . .
 ENV LIBRIST_SRC=/opt/librist-src
 RUN cargo build \
     -p kinugasa-test-tools --bin protocol_e2e \
-    -p kinugasa-gst --bin rist_receive
+    -p kinugasa-gst --bin rist_receive \
+    -p kinugasa-gst --bin srt_receive
 
 FROM debian:bookworm-slim AS runtime
 
@@ -33,11 +34,13 @@ RUN apt-get update \
         ca-certificates \
         ffmpeg \
         gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-bad \
         libgstreamer1.0-0 \
         libgstreamer-plugins-base1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/target/debug/protocol_e2e /usr/local/bin/protocol_e2e
 COPY --from=builder /src/target/debug/rist_receive /usr/local/bin/rist_receive
+COPY --from=builder /src/target/debug/srt_receive /usr/local/bin/srt_receive
 
 WORKDIR /test
