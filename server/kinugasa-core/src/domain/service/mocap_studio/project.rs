@@ -1,4 +1,4 @@
-use super::types::{event, state};
+use crate::domain::model::mocap_studio::{event, state};
 
 pub fn project(
     prev: state::MocapStudio,
@@ -21,29 +21,29 @@ pub fn project(
 }
 
 pub fn project_camera_created(
-    prev: state::MocapStudio,
-    transition: event::CameraCreatedEventLatest,
+    _prev: state::MocapStudio,
+    _transition: event::CameraCreatedEventLatest,
 ) -> state::MocapStudio {
     unimplemented!()
 }
 
 pub fn project_camera_deleted(
-    prev: state::MocapStudio,
-    transition: event::CameraDeletedEventLatest,
+    _prev: state::MocapStudio,
+    _transition: event::CameraDeletedEventLatest,
 ) -> state::MocapStudio {
     unimplemented!()
 }
 
 pub fn project_take_started(
-    prev: state::MocapStudio,
-    transition: event::TakeStartedEventLatest,
+    _prev: state::MocapStudio,
+    _transition: event::TakeStartedEventLatest,
 ) -> state::MocapStudio {
     unimplemented!()
 }
 
 pub fn project_take_completed(
-    prev: state::MocapStudio,
-    transition: event::TakeCompletedEventLatest,
+    _prev: state::MocapStudio,
+    _transition: event::TakeCompletedEventLatest,
 ) -> state::MocapStudio {
     unimplemented!()
 }
