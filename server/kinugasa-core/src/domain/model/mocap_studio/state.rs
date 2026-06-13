@@ -11,6 +11,14 @@ pub struct MocapStudio {
 pub struct Camera {
     pub name: String,
     pub rist_url: String,
+    pub status: CameraStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CameraStatus {
+    Capturing,
+    Idle,
+    Deleted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
