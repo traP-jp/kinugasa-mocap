@@ -5,3 +5,6 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+axum.workspace = true
+kinugasa-core = { path = "../kinugasa-core" }
+tokio.workspace = true
