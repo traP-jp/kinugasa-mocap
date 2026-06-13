@@ -1,4 +1,4 @@
-use crate::mocap_studio::types::event;
+use crate::domain::model::mocap_studio::event;
 
 pub fn upcast(event: event::MocapStudioEvent) -> event::MocapStudioEventLatest {
     match event {
