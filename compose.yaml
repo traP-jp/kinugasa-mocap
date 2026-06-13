@@ -58,6 +58,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-kinugasa}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-kinugasa}
     volumes:
+      - ./server/kinugasa-infra/mysql/init:/docker-entrypoint-initdb.d:ro
       - mysql-data:/var/lib/mysql
     ports:
       - "${MYSQL_PORT:-3306}:3306"
