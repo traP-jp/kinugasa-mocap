@@ -1,4 +1,25 @@
-use crate::domain::model::{id, unit_of_work};
+use crate::domain::model::{id, time, unit_of_work};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MocapTeam {
+    pub id: id::MocapTeamId,
+    pub external_usergroup_key: id::ExternalGroupKey,
+    pub created_at: time::Timestamp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MocapStudio {
+    pub id: id::MocapStudioId,
+    pub team_id: id::MocapTeamId,
+    pub name: String,
+    pub status: MocapStudioStatus,
+    pub last_event_sequence_number: StudioEventSequenceNumber,
+    pub created_at: time::Timestamp,
+    pub updated_at: time::Timestamp,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StudioEventSequenceNumber(pub u64);
 
 #[derive(Debug, Clone, Default)]
 pub struct UpdateMocapTeamParams {
@@ -8,10 +29,10 @@ pub struct UpdateMocapTeamParams {
 #[derive(Debug, Clone, Default)]
 pub struct UpdateMocapStudioParams {
     pub status: Option<MocapStudioStatus>,
-    pub last_event_sequence_number: Option<u64>,
+    pub last_event_sequence_number: Option<StudioEventSequenceNumber>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MocapStudioStatus {
     Capturing,
     Idle,

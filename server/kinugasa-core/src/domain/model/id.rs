@@ -8,6 +8,12 @@ pub struct MocapTeamId(pub uuid::Uuid);
 pub struct MocapStudioId(pub uuid::Uuid);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct StudioEventId(pub uuid::Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct StudioLogId(pub uuid::Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CameraId(pub uuid::Uuid);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

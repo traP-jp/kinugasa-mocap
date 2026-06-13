@@ -42,7 +42,9 @@ pub fn project_camera_created(
         transition.id,
         state::Camera {
             name: transition.name,
-            rist_url: transition.rist_url,
+            rist_configuration: state::RistConfiguration {
+                url: transition.rist_url,
+            },
             status: state::CameraStatus::Idle,
         },
     );
@@ -78,6 +80,7 @@ pub fn project_take_started(
             (
                 video.id,
                 state::Video {
+                    take_id: transition.id,
                     camera_id: video.camera_id,
                     video_key: video.video_key,
                 },
@@ -85,7 +88,15 @@ pub fn project_take_started(
         })
         .collect();
 
-    prev.ongoing_take = Some((transition.id, state::Take { videos }));
+    prev.ongoing_take = Some((
+        transition.id,
+        state::Take {
+            take_number: None,
+            started_at: None,
+            completed_at: None,
+            videos,
+        },
+    ));
     Ok(prev)
 }
 
@@ -98,9 +109,11 @@ pub fn project_take_completed(
     };
 
     if take_id == transition.id {
+        let mut take = take;
         for video in take.videos.values() {
             set_active_camera_status(&mut prev, video.camera_id, state::CameraStatus::Idle);
         }
+        take.completed_at = None;
         prev.completed_takes.insert(take_id, take);
     } else {
         prev.ongoing_take = Some((take_id, take));
@@ -145,7 +158,9 @@ mod tests {
             state.cameras.get(&camera_id),
             Some(&state::Camera {
                 name: "main".to_string(),
-                rist_url: "rist://main".to_string(),
+                rist_configuration: state::RistConfiguration {
+                    url: "rist://main".to_string(),
+                },
                 status: state::CameraStatus::Idle,
             })
         );
@@ -195,6 +210,7 @@ mod tests {
         assert_eq!(
             ongoing_take.videos.get(&video_id),
             Some(&state::Video {
+                take_id,
                 camera_id,
                 video_key: "videos/take-1-main.mp4".to_string(),
             })
@@ -262,6 +278,9 @@ mod tests {
         state.ongoing_take = Some((
             take_id,
             state::Take {
+                take_number: None,
+                started_at: None,
+                completed_at: None,
                 videos: std::collections::HashMap::new(),
             },
         ));

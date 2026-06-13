@@ -1,6 +1,6 @@
-use crate::domain::model::{id, unit_of_work};
+use crate::domain::model::{id, time, unit_of_work};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LogLevel {
     Error,
     Warn,
@@ -9,13 +9,21 @@ pub enum LogLevel {
     Trace,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogEntry {
     pub level: LogLevel,
     pub message: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StudioLog {
+    pub id: id::StudioLogId,
+    pub studio_id: id::MocapStudioId,
+    pub entry: LogEntry,
+    pub created_at: time::Timestamp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogSegment {
     pub top_index: usize,
     pub length: usize,
