@@ -1,6 +1,7 @@
-use crate::domain::model::{id, time, unit_of_work};
+use crate::domain::model::{id, mocap_studio::state, time, unit_of_work};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LogLevel {
     Error,
     Warn,
@@ -9,10 +10,25 @@ pub enum LogLevel {
     Trace,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LogMessage {
+    StudioCreated,
+    StudioClosed,
+    CameraCreated { name: String },
+    CameraDeleted { name: String },
+    TakeStarted { take_number: state::TakeNumber },
+    TakeCompleted { take_number: state::TakeNumber },
+    CaptureStarted { camera_name: String },
+    CaptureStopped { camera_name: String },
+    CaptureFailed { camera_name: String },
+    StorageUnavailable,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogEntry {
     pub level: LogLevel,
-    pub message: String,
+    pub message: LogMessage,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
