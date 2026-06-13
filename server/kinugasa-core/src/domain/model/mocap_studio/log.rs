@@ -1,3 +1,5 @@
+use crate::domain::model::{id, unit_of_work};
+
 #[derive(Debug, Clone)]
 pub enum LogLevel {
     Error,
@@ -18,4 +20,24 @@ pub struct LogSegment {
     pub top_index: usize,
     pub length: usize,
     pub log_entries: Vec<LogEntry>,
+}
+
+#[async_trait::async_trait]
+pub trait MocapStudioLogRepository {
+    type UoW: unit_of_work::UnitOfWork;
+
+    async fn push_log(
+        &self,
+        uow: &mut Self::UoW,
+        studio_id: id::MocapStudioId,
+        log_entry: LogEntry,
+    ) -> anyhow::Result<()>;
+
+    async fn get_logs_from(
+        &self,
+        uow: &mut Self::UoW,
+        studio_id: id::MocapStudioId,
+        log_level: Option<LogLevel>,
+        from: usize,
+    ) -> anyhow::Result<LogSegment>;
 }

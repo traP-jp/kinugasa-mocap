@@ -3,15 +3,10 @@ pub mod camera_deleted_v0;
 pub mod take_completed_v0;
 pub mod take_started_v0;
 
-pub use camera_created_v0::*;
-pub use camera_deleted_v0::*;
-pub use take_completed_v0::*;
-pub use take_started_v0::*;
-
-pub type CameraCreatedEventLatest = CameraCreatedEventV0;
-pub type CameraDeletedEventLatest = CameraDeletedEventV0;
-pub type TakeStartedEventLatest = TakeStartedEventV0;
-pub type TakeCompletedEventLatest = TakeCompletedEventV0;
+pub type CameraCreatedEventLatest = camera_created_v0::CameraCreatedEventV0;
+pub type CameraDeletedEventLatest = camera_deleted_v0::CameraDeletedEventV0;
+pub type TakeStartedEventLatest = take_started_v0::TakeStartedEventV0;
+pub type TakeCompletedEventLatest = take_completed_v0::TakeCompletedEventV0;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum MocapStudioEvent {
@@ -32,19 +27,19 @@ pub enum MocapStudioEventLatest {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum CameraCreatedEvent {
-    V0(CameraCreatedEventV0),
+    V0(camera_created_v0::CameraCreatedEventV0),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum CameraDeletedEvent {
-    V0(CameraDeletedEventV0),
+    V0(camera_deleted_v0::CameraDeletedEventV0),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TakeStartedEvent {
-    V0(TakeStartedEventV0),
+    V0(take_started_v0::TakeStartedEventV0),
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TakeCompletedEvent {
-    V0(TakeCompletedEventV0),
+    V0(take_completed_v0::TakeCompletedEventV0),
 }
