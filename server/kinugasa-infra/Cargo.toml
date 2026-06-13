@@ -1,11 +1,13 @@
 [package]
-name = "kinugasa-recording-console-app"
+name = "kinugasa-infra"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-axum.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
 kinugasa-core = { path = "../kinugasa-core" }
-kinugasa-infra = { path = "../kinugasa-infra" }
-tokio.workspace = true
+sqlx.workspace = true
+uuid.workspace = true

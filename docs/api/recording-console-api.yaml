@@ -12,6 +12,8 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development server
+security:
+  - bearerAuth: []
 tags:
   - name: Health
   - name: MocapTeams
@@ -56,17 +58,16 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/MocapTeam"
+
+  /mocap-teams/{externalUsergroupKey}:
     post:
       tags:
         - MocapTeams
       operationId: createMocapTeam
-      summary: Create a mocap team
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateMocapTeamRequest"
+      summary: Create a mocap team for an external user group
+      description: The authenticated external user must belong to the external user group.
+      parameters:
+        - $ref: "#/components/parameters/ExternalUsergroupKey"
       responses:
         "201":
           description: The mocap team was created.
@@ -74,6 +75,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MocapTeam"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
         "422":
@@ -97,7 +100,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /mocap-teams/{teamId}:
+  /mocap-teams/by-id/{teamId}:
     get:
       tags:
         - MocapTeams
@@ -114,32 +117,6 @@ paths:
                 $ref: "#/components/schemas/MocapTeam"
         "404":
           $ref: "#/components/responses/NotFound"
-    patch:
-      tags:
-        - MocapTeams
-      operationId: updateMocapTeam
-      summary: Update a mocap team
-      parameters:
-        - $ref: "#/components/parameters/TeamId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateMocapTeamRequest"
-      responses:
-        "200":
-          description: The mocap team was updated.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MocapTeam"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/ValidationError"
 
   /mocap-teams/{teamId}/studios:
     get:
@@ -702,8 +679,24 @@ components:
         $ref: "#/components/schemas/Uuid"
 
   responses:
+    Unauthorized:
+      description: Authentication is required or the bearer token is invalid.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
     Conflict:
       description: The request conflicts with the current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: The authenticated user is not allowed to perform the request.
       content:
         application/json:
           schema:
@@ -846,16 +839,6 @@ components:
         - name
       properties:
         name:
-          type: string
-          minLength: 1
-      additionalProperties: false
-
-    CreateMocapTeamRequest:
-      type: object
-      required:
-        - external_usergroup_key
-      properties:
-        external_usergroup_key:
           type: string
           minLength: 1
       additionalProperties: false
@@ -1201,14 +1184,6 @@ components:
           minimum: 0
       additionalProperties: false
 
-    UpdateMocapTeamRequest:
-      type: object
-      properties:
-        external_usergroup_key:
-          type: string
-          minLength: 1
-      additionalProperties: false
-
     Uuid:
       type: string
       format: uuid
@@ -1238,3 +1213,8 @@ components:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
