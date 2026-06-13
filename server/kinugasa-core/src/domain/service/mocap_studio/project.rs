@@ -1,9 +1,23 @@
 use crate::domain::model::mocap_studio::{event, state};
 
+pub type ProjectionResult<T> = Result<T, ProjectionError>;
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ProjectionError {
+    #[error("active camera cannot be deleted")]
+    ActiveCameraCannotBeDeleted,
+
+    #[error("take already started")]
+    TakeAlreadyStarted,
+
+    #[error("take is not started")]
+    TakeNotStarted,
+}
+
 pub fn project(
     prev: state::MocapStudio,
     transition: event::MocapStudioEventLatest,
-) -> state::MocapStudio {
+) -> ProjectionResult<state::MocapStudio> {
     match transition {
         event::MocapStudioEventLatest::CameraCreated(transition) => {
             project_camera_created(prev, transition)
@@ -23,7 +37,7 @@ pub fn project(
 pub fn project_camera_created(
     mut prev: state::MocapStudio,
     transition: event::CameraCreatedEventLatest,
-) -> state::MocapStudio {
+) -> ProjectionResult<state::MocapStudio> {
     prev.cameras.insert(
         transition.id,
         state::Camera {
@@ -32,23 +46,30 @@ pub fn project_camera_created(
             status: state::CameraStatus::Idle,
         },
     );
-    prev
+    Ok(prev)
 }
 
 pub fn project_camera_deleted(
     mut prev: state::MocapStudio,
     transition: event::CameraDeletedEventLatest,
-) -> state::MocapStudio {
+) -> ProjectionResult<state::MocapStudio> {
     if let Some(camera) = prev.cameras.get_mut(&transition.id) {
+        if camera.status == state::CameraStatus::Capturing {
+            return Err(ProjectionError::ActiveCameraCannotBeDeleted);
+        }
         camera.status = state::CameraStatus::Deleted;
     }
-    prev
+    Ok(prev)
 }
 
 pub fn project_take_started(
     mut prev: state::MocapStudio,
     transition: event::TakeStartedEventLatest,
-) -> state::MocapStudio {
+) -> ProjectionResult<state::MocapStudio> {
+    if prev.ongoing_take.is_some() {
+        return Err(ProjectionError::TakeAlreadyStarted);
+    }
+
     let videos = transition
         .video_keys
         .into_iter()
@@ -65,25 +86,27 @@ pub fn project_take_started(
         .collect();
 
     prev.ongoing_take = Some((transition.id, state::Take { videos }));
-    prev
+    Ok(prev)
 }
 
 pub fn project_take_completed(
     mut prev: state::MocapStudio,
     transition: event::TakeCompletedEventLatest,
-) -> state::MocapStudio {
-    if let Some((take_id, take)) = prev.ongoing_take.take() {
-        if take_id == transition.id {
-            for video in take.videos.values() {
-                set_active_camera_status(&mut prev, video.camera_id, state::CameraStatus::Idle);
-            }
-            prev.completed_takes.insert(take_id, take);
-        } else {
-            prev.ongoing_take = Some((take_id, take));
+) -> ProjectionResult<state::MocapStudio> {
+    let Some((take_id, take)) = prev.ongoing_take.take() else {
+        return Err(ProjectionError::TakeNotStarted);
+    };
+
+    if take_id == transition.id {
+        for video in take.videos.values() {
+            set_active_camera_status(&mut prev, video.camera_id, state::CameraStatus::Idle);
         }
+        prev.completed_takes.insert(take_id, take);
+    } else {
+        prev.ongoing_take = Some((take_id, take));
     }
 
-    prev
+    Ok(prev)
 }
 
 fn set_active_camera_status(
@@ -115,7 +138,8 @@ mod tests {
                 name: "main".to_string(),
                 rist_url: "rist://main".to_string(),
             },
-        );
+        )
+        .expect("camera creation should be projected");
 
         assert_eq!(
             state.cameras.get(&camera_id),
@@ -127,7 +151,8 @@ mod tests {
         );
 
         let state =
-            project_camera_deleted(state, event::CameraDeletedEventLatest { id: camera_id });
+            project_camera_deleted(state, event::CameraDeletedEventLatest { id: camera_id })
+                .expect("idle camera deletion should be projected");
 
         assert_eq!(
             state.cameras.get(&camera_id).map(|camera| &camera.status),
@@ -147,7 +172,8 @@ mod tests {
                 name: "main".to_string(),
                 rist_url: "rist://main".to_string(),
             },
-        );
+        )
+        .expect("camera creation should be projected");
 
         let state = project_take_started(
             state,
@@ -159,7 +185,8 @@ mod tests {
                     video_key: "videos/take-1-main.mp4".to_string(),
                 }],
             },
-        );
+        )
+        .expect("take start should be projected");
 
         let (_, ongoing_take) = state
             .ongoing_take
@@ -177,7 +204,8 @@ mod tests {
             Some(&state::CameraStatus::Capturing)
         );
 
-        let state = project_take_completed(state, event::TakeCompletedEventLatest { id: take_id });
+        let state = project_take_completed(state, event::TakeCompletedEventLatest { id: take_id })
+            .expect("take completion should be projected");
 
         assert!(state.ongoing_take.is_none());
         assert!(state.completed_takes.contains_key(&take_id));
@@ -188,7 +216,7 @@ mod tests {
     }
 
     #[test]
-    fn keeps_deleted_camera_deleted_when_take_completes() {
+    fn deleted_camera_is_not_reactivated_by_take_lifecycle() {
         let camera_id = id::CameraId(uuid::Uuid::from_u128(1));
         let take_id = id::TakeId(uuid::Uuid::from_u128(2));
         let video_id = id::VideoId(uuid::Uuid::from_u128(3));
@@ -199,7 +227,11 @@ mod tests {
                 name: "main".to_string(),
                 rist_url: "rist://main".to_string(),
             },
-        );
+        )
+        .expect("camera creation should be projected");
+        let state =
+            project_camera_deleted(state, event::CameraDeletedEventLatest { id: camera_id })
+                .expect("idle camera deletion should be projected");
         let state = project_take_started(
             state,
             event::TakeStartedEventLatest {
@@ -210,11 +242,11 @@ mod tests {
                     video_key: "videos/take-1-main.mp4".to_string(),
                 }],
             },
-        );
-        let state =
-            project_camera_deleted(state, event::CameraDeletedEventLatest { id: camera_id });
+        )
+        .expect("take start should be projected");
 
-        let state = project_take_completed(state, event::TakeCompletedEventLatest { id: take_id });
+        let state = project_take_completed(state, event::TakeCompletedEventLatest { id: take_id })
+            .expect("take completion should be projected");
 
         assert_eq!(
             state.cameras.get(&camera_id).map(|camera| &camera.status),
@@ -235,9 +267,82 @@ mod tests {
         ));
 
         let state =
-            project_take_completed(state, event::TakeCompletedEventLatest { id: other_take_id });
+            project_take_completed(state, event::TakeCompletedEventLatest { id: other_take_id })
+                .expect("completion with another take id should preserve ongoing take");
 
         assert_eq!(state.ongoing_take.map(|(id, _)| id), Some(take_id));
         assert!(!state.completed_takes.contains_key(&other_take_id));
+    }
+
+    #[test]
+    fn rejects_deleting_active_camera() {
+        let camera_id = id::CameraId(uuid::Uuid::from_u128(1));
+        let take_id = id::TakeId(uuid::Uuid::from_u128(2));
+        let video_id = id::VideoId(uuid::Uuid::from_u128(3));
+        let state = project_camera_created(
+            state::MocapStudio::default(),
+            event::CameraCreatedEventLatest {
+                id: camera_id,
+                name: "main".to_string(),
+                rist_url: "rist://main".to_string(),
+            },
+        )
+        .expect("camera creation should be projected");
+        let state = project_take_started(
+            state,
+            event::TakeStartedEventLatest {
+                id: take_id,
+                video_keys: vec![event::take_started_v0::TakeStartedEventV0Video {
+                    id: video_id,
+                    camera_id,
+                    video_key: "videos/take-1-main.mp4".to_string(),
+                }],
+            },
+        )
+        .expect("take start should be projected");
+
+        let error =
+            project_camera_deleted(state, event::CameraDeletedEventLatest { id: camera_id })
+                .expect_err("active camera deletion should be rejected");
+
+        assert_eq!(error, ProjectionError::ActiveCameraCannotBeDeleted);
+    }
+
+    #[test]
+    fn rejects_starting_take_when_one_is_ongoing() {
+        let first_take_id = id::TakeId(uuid::Uuid::from_u128(1));
+        let second_take_id = id::TakeId(uuid::Uuid::from_u128(2));
+        let state = project_take_started(
+            state::MocapStudio::default(),
+            event::TakeStartedEventLatest {
+                id: first_take_id,
+                video_keys: vec![],
+            },
+        )
+        .expect("first take start should be projected");
+
+        let error = project_take_started(
+            state,
+            event::TakeStartedEventLatest {
+                id: second_take_id,
+                video_keys: vec![],
+            },
+        )
+        .expect_err("second simultaneous take should be rejected");
+
+        assert_eq!(error, ProjectionError::TakeAlreadyStarted);
+    }
+
+    #[test]
+    fn rejects_completing_take_when_none_is_ongoing() {
+        let take_id = id::TakeId(uuid::Uuid::from_u128(1));
+
+        let error = project_take_completed(
+            state::MocapStudio::default(),
+            event::TakeCompletedEventLatest { id: take_id },
+        )
+        .expect_err("take completion without ongoing take should be rejected");
+
+        assert_eq!(error, ProjectionError::TakeNotStarted);
     }
 }
