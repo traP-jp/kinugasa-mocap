@@ -28,13 +28,15 @@ pub enum CameraStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Take {
-    pub take_number: Option<TakeNumber>,
-    pub started_at: Option<time::Timestamp>,
+    pub take_number: TakeNumber,
+    pub started_at: time::Timestamp,
     pub completed_at: Option<time::Timestamp>,
     pub videos: HashMap<id::VideoId, Video>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct TakeNumber(pub u32);
 
 #[derive(Debug, Clone, PartialEq, Eq)]

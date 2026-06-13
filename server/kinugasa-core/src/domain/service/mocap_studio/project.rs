@@ -91,8 +91,8 @@ pub fn project_take_started(
     prev.ongoing_take = Some((
         transition.id,
         state::Take {
-            take_number: None,
-            started_at: None,
+            take_number: transition.take_number,
+            started_at: transition.started_at,
             completed_at: None,
             videos,
         },
@@ -113,7 +113,7 @@ pub fn project_take_completed(
         for video in take.videos.values() {
             set_active_camera_status(&mut prev, video.camera_id, state::CameraStatus::Idle);
         }
-        take.completed_at = None;
+        take.completed_at = Some(transition.completed_at);
         prev.completed_takes.insert(take_id, take);
     } else {
         prev.ongoing_take = Some((take_id, take));
@@ -138,6 +138,10 @@ fn set_active_camera_status(
 mod tests {
     use super::*;
     use crate::domain::model::id;
+
+    fn timestamp(seconds: i64) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::from_timestamp(seconds, 0).expect("test timestamp should be valid")
+    }
 
     #[test]
     fn projects_camera_lifecycle() {
@@ -180,6 +184,8 @@ mod tests {
         let camera_id = id::CameraId(uuid::Uuid::from_u128(1));
         let take_id = id::TakeId(uuid::Uuid::from_u128(2));
         let video_id = id::VideoId(uuid::Uuid::from_u128(3));
+        let started_at = timestamp(100);
+        let completed_at = timestamp(200);
         let state = project_camera_created(
             state::MocapStudio::default(),
             event::CameraCreatedEventLatest {
@@ -194,6 +200,8 @@ mod tests {
             state,
             event::TakeStartedEventLatest {
                 id: take_id,
+                take_number: state::TakeNumber(1),
+                started_at,
                 video_keys: vec![event::take_started_v0::TakeStartedEventV0Video {
                     id: video_id,
                     camera_id,
@@ -207,6 +215,9 @@ mod tests {
             .ongoing_take
             .as_ref()
             .expect("started take should be ongoing");
+        assert_eq!(ongoing_take.take_number, state::TakeNumber(1));
+        assert_eq!(ongoing_take.started_at, started_at);
+        assert_eq!(ongoing_take.completed_at, None);
         assert_eq!(
             ongoing_take.videos.get(&video_id),
             Some(&state::Video {
@@ -220,11 +231,23 @@ mod tests {
             Some(&state::CameraStatus::Capturing)
         );
 
-        let state = project_take_completed(state, event::TakeCompletedEventLatest { id: take_id })
-            .expect("take completion should be projected");
+        let state = project_take_completed(
+            state,
+            event::TakeCompletedEventLatest {
+                id: take_id,
+                completed_at,
+            },
+        )
+        .expect("take completion should be projected");
 
         assert!(state.ongoing_take.is_none());
-        assert!(state.completed_takes.contains_key(&take_id));
+        assert_eq!(
+            state
+                .completed_takes
+                .get(&take_id)
+                .map(|take| take.completed_at),
+            Some(Some(completed_at))
+        );
         assert_eq!(
             state.cameras.get(&camera_id).map(|camera| &camera.status),
             Some(&state::CameraStatus::Idle)
@@ -236,6 +259,8 @@ mod tests {
         let camera_id = id::CameraId(uuid::Uuid::from_u128(1));
         let take_id = id::TakeId(uuid::Uuid::from_u128(2));
         let video_id = id::VideoId(uuid::Uuid::from_u128(3));
+        let started_at = timestamp(100);
+        let completed_at = timestamp(200);
         let state = project_camera_created(
             state::MocapStudio::default(),
             event::CameraCreatedEventLatest {
@@ -252,6 +277,8 @@ mod tests {
             state,
             event::TakeStartedEventLatest {
                 id: take_id,
+                take_number: state::TakeNumber(1),
+                started_at,
                 video_keys: vec![event::take_started_v0::TakeStartedEventV0Video {
                     id: video_id,
                     camera_id,
@@ -261,8 +288,14 @@ mod tests {
         )
         .expect("take start should be projected");
 
-        let state = project_take_completed(state, event::TakeCompletedEventLatest { id: take_id })
-            .expect("take completion should be projected");
+        let state = project_take_completed(
+            state,
+            event::TakeCompletedEventLatest {
+                id: take_id,
+                completed_at,
+            },
+        )
+        .expect("take completion should be projected");
 
         assert_eq!(
             state.cameras.get(&camera_id).map(|camera| &camera.status),
@@ -278,16 +311,21 @@ mod tests {
         state.ongoing_take = Some((
             take_id,
             state::Take {
-                take_number: None,
-                started_at: None,
+                take_number: state::TakeNumber(1),
+                started_at: timestamp(100),
                 completed_at: None,
                 videos: std::collections::HashMap::new(),
             },
         ));
 
-        let state =
-            project_take_completed(state, event::TakeCompletedEventLatest { id: other_take_id })
-                .expect("completion with another take id should preserve ongoing take");
+        let state = project_take_completed(
+            state,
+            event::TakeCompletedEventLatest {
+                id: other_take_id,
+                completed_at: timestamp(200),
+            },
+        )
+        .expect("completion with another take id should preserve ongoing take");
 
         assert_eq!(state.ongoing_take.map(|(id, _)| id), Some(take_id));
         assert!(!state.completed_takes.contains_key(&other_take_id));
@@ -298,6 +336,7 @@ mod tests {
         let camera_id = id::CameraId(uuid::Uuid::from_u128(1));
         let take_id = id::TakeId(uuid::Uuid::from_u128(2));
         let video_id = id::VideoId(uuid::Uuid::from_u128(3));
+        let started_at = timestamp(100);
         let state = project_camera_created(
             state::MocapStudio::default(),
             event::CameraCreatedEventLatest {
@@ -311,6 +350,8 @@ mod tests {
             state,
             event::TakeStartedEventLatest {
                 id: take_id,
+                take_number: state::TakeNumber(1),
+                started_at,
                 video_keys: vec![event::take_started_v0::TakeStartedEventV0Video {
                     id: video_id,
                     camera_id,
@@ -335,6 +376,8 @@ mod tests {
             state::MocapStudio::default(),
             event::TakeStartedEventLatest {
                 id: first_take_id,
+                take_number: state::TakeNumber(1),
+                started_at: timestamp(100),
                 video_keys: vec![],
             },
         )
@@ -344,6 +387,8 @@ mod tests {
             state,
             event::TakeStartedEventLatest {
                 id: second_take_id,
+                take_number: state::TakeNumber(2),
+                started_at: timestamp(200),
                 video_keys: vec![],
             },
         )
@@ -358,7 +403,10 @@ mod tests {
 
         let error = project_take_completed(
             state::MocapStudio::default(),
-            event::TakeCompletedEventLatest { id: take_id },
+            event::TakeCompletedEventLatest {
+                id: take_id,
+                completed_at: timestamp(200),
+            },
         )
         .expect_err("take completion without ongoing take should be rejected");
 
