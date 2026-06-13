@@ -331,6 +331,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kinugasa-recording-capture-app"
+version = "0.1.0"
+
+[[package]]
+name = "kinugasa-recording-console-app"
+version = "0.1.0"
+
+[[package]]
 name = "kinugasa-test-tools"
 version = "0.1.0"
 dependencies = [
