@@ -27,21 +27,21 @@ pub struct StudioLog {
 pub struct LogSegment {
     pub top_index: usize,
     pub length: usize,
-    pub log_entries: Vec<LogEntry>,
+    pub logs: Vec<StudioLog>,
 }
 
 #[async_trait::async_trait]
 pub trait MocapStudioLogRepository {
     type UoW: unit_of_work::UnitOfWork;
 
-    async fn push_log(
+    async fn append_studio_log(
         &self,
         uow: &mut Self::UoW,
         studio_id: id::MocapStudioId,
         log_entry: LogEntry,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<StudioLog>;
 
-    async fn get_logs_from(
+    async fn get_studio_logs_from(
         &self,
         uow: &mut Self::UoW,
         studio_id: id::MocapStudioId,

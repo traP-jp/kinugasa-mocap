@@ -43,6 +43,20 @@ pub enum MocapStudioStatus {
 pub trait MocapTeamRepository {
     type UoW: unit_of_work::UnitOfWork;
 
+    async fn get_mocap_team(
+        &self,
+        uow: &mut Self::UoW,
+        id: id::MocapTeamId,
+    ) -> anyhow::Result<Option<MocapTeam>>;
+
+    async fn find_mocap_team_by_external_usergroup_key(
+        &self,
+        uow: &mut Self::UoW,
+        external_usergroup_key: id::ExternalGroupKey,
+    ) -> anyhow::Result<Option<MocapTeam>>;
+
+    async fn list_mocap_teams(&self, uow: &mut Self::UoW) -> anyhow::Result<Vec<MocapTeam>>;
+
     async fn add_mocap_team(
         &self,
         uow: &mut Self::UoW,
@@ -62,6 +76,18 @@ pub trait MocapTeamRepository {
         team_id: id::MocapTeamId,
         name: String,
     ) -> anyhow::Result<id::MocapStudioId>;
+
+    async fn get_mocap_studio(
+        &self,
+        uow: &mut Self::UoW,
+        id: id::MocapStudioId,
+    ) -> anyhow::Result<Option<MocapStudio>>;
+
+    async fn list_mocap_studios_by_team(
+        &self,
+        uow: &mut Self::UoW,
+        team_id: id::MocapTeamId,
+    ) -> anyhow::Result<Vec<MocapStudio>>;
 
     async fn update_mocap_studio(
         &self,

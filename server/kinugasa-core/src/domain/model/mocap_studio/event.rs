@@ -3,7 +3,7 @@ pub mod camera_deleted_v0;
 pub mod take_completed_v0;
 pub mod take_started_v0;
 
-use crate::domain::model::{id, mocap_team, time};
+use crate::domain::model::{id, mocap_team, time, unit_of_work};
 
 pub type CameraCreatedEventLatest = camera_created_v0::CameraCreatedEventV0;
 pub type CameraDeletedEventLatest = camera_deleted_v0::CameraDeletedEventV0;
@@ -17,6 +17,33 @@ pub struct StudioEventRecord {
     pub sequence_number: mocap_team::StudioEventSequenceNumber,
     pub event: MocapStudioEvent,
     pub created_at: time::Timestamp,
+}
+
+#[async_trait::async_trait]
+pub trait MocapStudioEventRepository {
+    type UoW: unit_of_work::UnitOfWork;
+
+    async fn append_studio_event(
+        &self,
+        uow: &mut Self::UoW,
+        studio_id: id::MocapStudioId,
+        sequence_number: mocap_team::StudioEventSequenceNumber,
+        event: MocapStudioEvent,
+    ) -> anyhow::Result<StudioEventRecord>;
+
+    async fn get_studio_event(
+        &self,
+        uow: &mut Self::UoW,
+        studio_id: id::MocapStudioId,
+        sequence_number: mocap_team::StudioEventSequenceNumber,
+    ) -> anyhow::Result<Option<StudioEventRecord>>;
+
+    async fn list_studio_events_from(
+        &self,
+        uow: &mut Self::UoW,
+        studio_id: id::MocapStudioId,
+        from_sequence_number: mocap_team::StudioEventSequenceNumber,
+    ) -> anyhow::Result<Vec<StudioEventRecord>>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
