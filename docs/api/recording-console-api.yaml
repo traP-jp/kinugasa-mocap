@@ -529,34 +529,6 @@ paths:
                       $ref: "#/components/schemas/StudioEvent"
         "404":
           $ref: "#/components/responses/NotFound"
-    post:
-      tags:
-        - Events
-      operationId: appendStudioEvent
-      summary: Append a studio event
-      description: Low-level event append endpoint for reconcilers and tests.
-      parameters:
-        - $ref: "#/components/parameters/StudioId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AppendStudioEventRequest"
-      responses:
-        "201":
-          description: The studio event was appended.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StudioEvent"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-
   /studios/{studioId}/logs:
     get:
       tags:
@@ -663,29 +635,6 @@ components:
             $ref: "#/components/schemas/Error"
 
   schemas:
-    AppendStudioEventRequest:
-      type: object
-      required:
-        - expected_sequence_number
-        - event_type
-        - event_version
-        - payload
-      properties:
-        expected_sequence_number:
-          type: integer
-          format: int64
-          minimum: 0
-          description: The sequence number to assign to the new event.
-        event_type:
-          $ref: "#/components/schemas/StudioEventType"
-        event_version:
-          type: integer
-          minimum: 0
-          const: 0
-        payload:
-          $ref: "#/components/schemas/StudioEventPayload"
-      additionalProperties: false
-
     Camera:
       type: object
       required:
