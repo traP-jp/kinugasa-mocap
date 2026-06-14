@@ -229,6 +229,24 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /studios/{studioId}/livekit/credentials:
+    post:
+      tags:
+        - Studios
+      operationId: createLiveKitCredentials
+      summary: Create LiveKit credentials for joining a studio room
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      responses:
+        "200":
+          description: LiveKit credentials for joining the studio room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveKitCredentials"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /studios/{studioId}/cameras:
     get:
       tags:
@@ -777,6 +795,35 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/StudioLog"
+
+    LiveKitCredentials:
+      type: object
+      required:
+        - server_url
+        - room_name
+        - participant_identity
+        - participant_name
+        - access_token
+        - expires_at
+      properties:
+        server_url:
+          type: string
+          format: uri
+        room_name:
+          type: string
+          minLength: 1
+        participant_identity:
+          type: string
+          minLength: 1
+        participant_name:
+          type: string
+          minLength: 1
+        access_token:
+          type: string
+          minLength: 1
+        expires_at:
+          $ref: "#/components/schemas/Timestamp"
+      additionalProperties: false
 
     MocapStudio:
       type: object
