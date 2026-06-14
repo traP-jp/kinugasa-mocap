@@ -479,21 +479,21 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /studios/{studioId}/videos/{videoId}:
-    get:
+    post:
       tags:
         - Videos
-      operationId: getVideo
-      summary: Get a video
+      operationId: createVideoDownloadUrl
+      summary: Create a presigned video download URL
       parameters:
         - $ref: "#/components/parameters/StudioId"
         - $ref: "#/components/parameters/VideoId"
       responses:
         "200":
-          description: The video.
+          description: A presigned URL for downloading the video.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Video"
+                $ref: "#/components/schemas/VideoDownloadUrl"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1127,6 +1127,19 @@ components:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
+
+    VideoDownloadUrl:
+      type: object
+      required:
+        - url
+        - expires_at
+      properties:
+        url:
+          type: string
+          format: uri
+        expires_at:
+          $ref: "#/components/schemas/Timestamp"
+      additionalProperties: false
 
   securitySchemes:
     bearerAuth:
