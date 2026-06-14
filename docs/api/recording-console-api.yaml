@@ -557,25 +557,6 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationError"
 
-  /studios/{studioId}/events/{sequenceNumber}:
-    get:
-      tags:
-        - Events
-      operationId: getStudioEvent
-      summary: Get a studio event by sequence number
-      parameters:
-        - $ref: "#/components/parameters/StudioId"
-        - $ref: "#/components/parameters/SequenceNumber"
-      responses:
-        "200":
-          description: The studio event.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StudioEvent"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   /studios/{studioId}/logs:
     get:
       tags:
@@ -620,14 +601,6 @@ components:
       schema:
         type: string
         minLength: 1
-    SequenceNumber:
-      name: sequenceNumber
-      in: path
-      required: true
-      schema:
-        type: integer
-        format: int64
-        minimum: 0
     StudioId:
       name: studioId
       in: path
