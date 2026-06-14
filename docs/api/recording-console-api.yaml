@@ -642,7 +642,7 @@ components:
         - studio_id
         - name
         - status
-        - rist_configuration
+        - stream_configuration
         - created_at
         - updated_at
       properties:
@@ -654,8 +654,8 @@ components:
           type: string
         status:
           $ref: "#/components/schemas/CameraStatus"
-        rist_configuration:
-          $ref: "#/components/schemas/RistConfiguration"
+        stream_configuration:
+          $ref: "#/components/schemas/StreamConfiguration"
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -666,16 +666,15 @@ components:
       required:
         - id
         - name
-        - rist_url
+        - stream_configuration
       properties:
         id:
           $ref: "#/components/schemas/Uuid"
         name:
           type: string
           minLength: 1
-        rist_url:
-          type: string
-          minLength: 1
+        stream_configuration:
+          $ref: "#/components/schemas/StreamConfiguration"
       additionalProperties: false
 
     CameraDeletedEventPayloadV0:
@@ -705,16 +704,15 @@ components:
       type: object
       required:
         - name
-        - rist_url
+        - stream_configuration
       properties:
         id:
           $ref: "#/components/schemas/Uuid"
         name:
           type: string
           minLength: 1
-        rist_url:
-          type: string
-          minLength: 1
+        stream_configuration:
+          $ref: "#/components/schemas/StreamConfiguration"
       additionalProperties: false
 
     CreateMocapStudioRequest:
@@ -849,12 +847,46 @@ components:
         created_at:
           $ref: "#/components/schemas/Timestamp"
 
-    RistConfiguration:
+    StreamConfiguration:
+      oneOf:
+        - $ref: "#/components/schemas/RistStreamConfiguration"
+        - $ref: "#/components/schemas/SrtStreamConfiguration"
+      discriminator:
+        propertyName: protocol
+        mapping:
+          rist: "#/components/schemas/RistStreamConfiguration"
+          srt: "#/components/schemas/SrtStreamConfiguration"
+
+    RistStreamConfiguration:
       type: object
       required:
+        - protocol
         - url
       properties:
+        protocol:
+          type: string
+          enum: 
+          - rist
         url:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    SrtStreamConfiguration:
+      type: object
+      required:
+        - protocol
+        - url
+        - stream_id
+      properties:
+        protocol:
+          type: string
+          enum: 
+          - srt
+        url:
+          type: string
+          minLength: 1
+        stream_id:
           type: string
           minLength: 1
       additionalProperties: false
