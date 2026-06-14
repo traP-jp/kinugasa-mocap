@@ -1,4 +1,4 @@
-openapi: 3.1.0
+openapi: 3.0.3
 info:
   title: Kinugasa Recording Console API
   version: 0.1.0
@@ -226,6 +226,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MocapStudioState"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /studios/{studioId}/livekit/credentials:
+    post:
+      tags:
+        - Studios
+      operationId: createLiveKitCredentials
+      summary: Create LiveKit credentials for joining a studio room
+      parameters:
+        - $ref: "#/components/parameters/StudioId"
+      responses:
+        "200":
+          description: LiveKit credentials for joining the studio room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveKitCredentials"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -479,21 +497,21 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /studios/{studioId}/videos/{videoId}:
-    get:
+    post:
       tags:
         - Videos
-      operationId: getVideo
-      summary: Get a video
+      operationId: createVideoDownloadUrl
+      summary: Create a presigned video download URL
       parameters:
         - $ref: "#/components/parameters/StudioId"
         - $ref: "#/components/parameters/VideoId"
       responses:
         "200":
-          description: The video.
+          description: A presigned URL for downloading the video.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Video"
+                $ref: "#/components/schemas/VideoDownloadUrl"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -529,53 +547,6 @@ paths:
                       $ref: "#/components/schemas/StudioEvent"
         "404":
           $ref: "#/components/responses/NotFound"
-    post:
-      tags:
-        - Events
-      operationId: appendStudioEvent
-      summary: Append a studio event
-      description: Low-level event append endpoint for reconcilers and tests.
-      parameters:
-        - $ref: "#/components/parameters/StudioId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AppendStudioEventRequest"
-      responses:
-        "201":
-          description: The studio event was appended.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StudioEvent"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-
-  /studios/{studioId}/events/{sequenceNumber}:
-    get:
-      tags:
-        - Events
-      operationId: getStudioEvent
-      summary: Get a studio event by sequence number
-      parameters:
-        - $ref: "#/components/parameters/StudioId"
-        - $ref: "#/components/parameters/SequenceNumber"
-      responses:
-        "200":
-          description: The studio event.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StudioEvent"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   /studios/{studioId}/logs:
     get:
       tags:
@@ -605,31 +576,6 @@ paths:
                 $ref: "#/components/schemas/LogSegment"
         "404":
           $ref: "#/components/responses/NotFound"
-    post:
-      tags:
-        - Logs
-      operationId: appendStudioLog
-      summary: Append a studio log
-      parameters:
-        - $ref: "#/components/parameters/StudioId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AppendStudioLogRequest"
-      responses:
-        "201":
-          description: The studio log was appended.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StudioLog"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-
 components:
   parameters:
     CameraId:
@@ -645,14 +591,6 @@ components:
       schema:
         type: string
         minLength: 1
-    SequenceNumber:
-      name: sequenceNumber
-      in: path
-      required: true
-      schema:
-        type: integer
-        format: int64
-        minimum: 0
     StudioId:
       name: studioId
       in: path
@@ -715,42 +653,6 @@ components:
             $ref: "#/components/schemas/Error"
 
   schemas:
-    AppendStudioEventRequest:
-      type: object
-      required:
-        - expected_sequence_number
-        - event_type
-        - event_version
-        - payload
-      properties:
-        expected_sequence_number:
-          type: integer
-          format: int64
-          minimum: 0
-          description: The sequence number to assign to the new event.
-        event_type:
-          $ref: "#/components/schemas/StudioEventType"
-        event_version:
-          type: integer
-          minimum: 0
-          const: 0
-        payload:
-          $ref: "#/components/schemas/StudioEventPayload"
-      additionalProperties: false
-
-    AppendStudioLogRequest:
-      type: object
-      required:
-        - level
-        - message
-      properties:
-        level:
-          $ref: "#/components/schemas/LogLevel"
-        message:
-          type: string
-          minLength: 1
-      additionalProperties: false
-
     Camera:
       type: object
       required:
@@ -758,7 +660,7 @@ components:
         - studio_id
         - name
         - status
-        - rist_configuration
+        - stream_configuration
         - created_at
         - updated_at
       properties:
@@ -770,8 +672,8 @@ components:
           type: string
         status:
           $ref: "#/components/schemas/CameraStatus"
-        rist_configuration:
-          $ref: "#/components/schemas/RistConfiguration"
+        stream_configuration:
+          $ref: "#/components/schemas/StreamConfiguration"
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -782,16 +684,15 @@ components:
       required:
         - id
         - name
-        - rist_url
+        - stream_configuration
       properties:
         id:
           $ref: "#/components/schemas/Uuid"
         name:
           type: string
           minLength: 1
-        rist_url:
-          type: string
-          minLength: 1
+        stream_configuration:
+          $ref: "#/components/schemas/StreamConfiguration"
       additionalProperties: false
 
     CameraDeletedEventPayloadV0:
@@ -821,16 +722,15 @@ components:
       type: object
       required:
         - name
-        - rist_url
+        - stream_configuration
       properties:
         id:
           $ref: "#/components/schemas/Uuid"
         name:
           type: string
           minLength: 1
-        rist_url:
-          type: string
-          minLength: 1
+        stream_configuration:
+          $ref: "#/components/schemas/StreamConfiguration"
       additionalProperties: false
 
     CreateMocapStudioRequest:
@@ -896,6 +796,35 @@ components:
           items:
             $ref: "#/components/schemas/StudioLog"
 
+    LiveKitCredentials:
+      type: object
+      required:
+        - server_url
+        - room_name
+        - participant_identity
+        - participant_name
+        - access_token
+        - expires_at
+      properties:
+        server_url:
+          type: string
+          format: uri
+        room_name:
+          type: string
+          minLength: 1
+        participant_identity:
+          type: string
+          minLength: 1
+        participant_name:
+          type: string
+          minLength: 1
+        access_token:
+          type: string
+          minLength: 1
+        expires_at:
+          $ref: "#/components/schemas/Timestamp"
+      additionalProperties: false
+
     MocapStudio:
       type: object
       required:
@@ -929,7 +858,6 @@ components:
       required:
         - cameras
         - completed_takes
-        - ongoing_take
       properties:
         cameras:
           type: array
@@ -942,7 +870,6 @@ components:
         ongoing_take:
           anyOf:
             - $ref: "#/components/schemas/Take"
-            - type: "null"
 
     MocapStudioStatus:
       type: string
@@ -965,12 +892,46 @@ components:
         created_at:
           $ref: "#/components/schemas/Timestamp"
 
-    RistConfiguration:
+    StreamConfiguration:
+      oneOf:
+        - $ref: "#/components/schemas/RistStreamConfiguration"
+        - $ref: "#/components/schemas/SrtStreamConfiguration"
+      discriminator:
+        propertyName: protocol
+        mapping:
+          rist: "#/components/schemas/RistStreamConfiguration"
+          srt: "#/components/schemas/SrtStreamConfiguration"
+
+    RistStreamConfiguration:
       type: object
       required:
+        - protocol
         - url
       properties:
+        protocol:
+          type: string
+          enum: 
+          - rist
         url:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    SrtStreamConfiguration:
+      type: object
+      required:
+        - protocol
+        - url
+        - stream_id
+      properties:
+        protocol:
+          type: string
+          enum: 
+          - srt
+        url:
+          type: string
+          minLength: 1
+        stream_id:
           type: string
           minLength: 1
       additionalProperties: false
@@ -1213,6 +1174,19 @@ components:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
+
+    VideoDownloadUrl:
+      type: object
+      required:
+        - url
+        - expires_at
+      properties:
+        url:
+          type: string
+          format: uri
+        expires_at:
+          $ref: "#/components/schemas/Timestamp"
+      additionalProperties: false
 
   securitySchemes:
     bearerAuth:
