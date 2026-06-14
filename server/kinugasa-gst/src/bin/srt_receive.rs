@@ -15,21 +15,26 @@ struct Config {
     stream_id: String,
     output: PathBuf,
     duration: Duration,
+    passphrase: String,
+    pbkeylen: u32,
 }
 
 fn run_receiver(config: &Config) -> Result<()> {
     gst::init().context("failed to initialize GStreamer")?;
+    kinugasa_gst::srt::register(None).context("failed to register kinugasasrtserversrc")?;
 
     let output = config
         .output
         .to_str()
         .context("--output must be valid UTF-8 for GStreamer filesink")?;
 
-    let source = gst::ElementFactory::make("srtsrc")
+    let source = gst::ElementFactory::make("kinugasasrtserversrc")
         .property("uri", &config.url)
-        .property("streamid", &config.stream_id)
+        .property("stream-ids", &config.stream_id)
+        .property("passphrase", &config.passphrase)
+        .property("pbkeylen", config.pbkeylen)
         .build()
-        .context("failed to create srtsrc")?;
+        .context("failed to create kinugasasrtserversrc")?;
     let sink = gst::ElementFactory::make("filesink")
         .property("location", output)
         .build()
@@ -89,6 +94,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Config> {
     let mut stream_id = None;
     let mut output = None;
     let mut duration = Duration::from_secs(5);
+    let mut passphrase = String::new();
+    let mut pbkeylen = 32;
     let mut args = args.into_iter();
 
     while let Some(arg) = args.next() {
@@ -96,6 +103,13 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Config> {
             "--url" => url = Some(next_value(&mut args, "--url")?),
             "--stream-id" => stream_id = Some(next_value(&mut args, "--stream-id")?),
             "--output" => output = Some(PathBuf::from(next_value(&mut args, "--output")?)),
+            "--passphrase" => passphrase = next_value(&mut args, "--passphrase")?,
+            "--pbkeylen" => {
+                pbkeylen = next_value(&mut args, "--pbkeylen")?
+                    .parse()
+                    .context("--pbkeylen must be 0, 16, 24, or 32")?;
+                ensure_pbkeylen(pbkeylen)?;
+            }
             "--duration" => {
                 duration = Duration::from_secs_f64(
                     next_value(&mut args, "--duration")?
@@ -111,12 +125,23 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Config> {
         }
     }
 
+    ensure_pbkeylen(pbkeylen)?;
+
     Ok(Config {
         url: url.context("--url is required")?,
         stream_id: stream_id.context("--stream-id is required")?,
         output: output.context("--output is required")?,
         duration,
+        passphrase,
+        pbkeylen,
     })
+}
+
+fn ensure_pbkeylen(pbkeylen: u32) -> Result<()> {
+    match pbkeylen {
+        0 | 16 | 24 | 32 => Ok(()),
+        _ => bail!("--pbkeylen must be 0, 16, 24, or 32"),
+    }
 }
 
 fn next_value(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<String> {
@@ -127,7 +152,7 @@ fn next_value(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<Str
 fn print_help() {
     println!(
         "\
-Receive SRT input with GStreamer's srtsrc and write the raw payload to a TS file.
+Receive SRT input with kinugasa_gst::srt and write the raw payload to a TS file.
 
 Required:
   --url URL          SRT receiver URL, for example srt://0.0.0.0:1234?mode=listener
@@ -136,6 +161,8 @@ Required:
 
 Optional:
   --duration SEC     receive duration. Default: 5
+  --passphrase TEXT  SRT encryption passphrase. Empty by default
+  --pbkeylen BYTES   0, 16, 24, or 32. Default: 32
 "
     );
 }

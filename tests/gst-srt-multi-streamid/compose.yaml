@@ -1,0 +1,387 @@
+x-runtime-image: &runtime-image
+  image: kinugasa-test-runtime
+  build:
+    context: ../..
+    dockerfile: tests/runtime.Dockerfile
+
+services:
+  same-id-receiver:
+    <<: *runtime-image
+    volumes:
+      - artifacts:/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/receiver.ready"]
+      interval: 100ms
+      timeout: 1s
+      retries: 50
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        rm -f /artifacts/same-id.done /artifacts/same-id.ts
+        touch /tmp/receiver.ready
+        srt-receive-multi-stream \
+          --url 'srt://0.0.0.0:32200?mode=listener' \
+          --stream-id shared-camera \
+          --output /artifacts/same-id.ts \
+          --duration 14 \
+          --passphrase kinugasa-aes256-pass \
+          --pbkeylen 32
+        touch /artifacts/same-id.done
+        sleep 30
+
+  same-id-sender-a:
+    <<: *runtime-image
+    depends_on:
+      same-id-receiver:
+        condition: service_healthy
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        sleep 2
+        ffmpeg \
+          -hide_banner \
+          -loglevel error \
+          -y \
+          -re \
+          -f lavfi \
+          -i 'testsrc2=size=160x90:rate=10' \
+          -re \
+          -f lavfi \
+          -i 'sine=frequency=880:sample_rate=48000' \
+          -t 2 \
+          -c:v mpeg2video \
+          -g 10 \
+          -bf 0 \
+          -c:a mp2 \
+          -b:a 96k \
+          -f mpegts \
+          'srt://same-id-receiver:32200?mode=caller&streamid=shared-camera&passphrase=kinugasa-aes256-pass&pbkeylen=32'
+
+  same-id-sender-b:
+    <<: *runtime-image
+    depends_on:
+      same-id-receiver:
+        condition: service_healthy
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        sleep 6
+        ffmpeg \
+          -hide_banner \
+          -loglevel error \
+          -y \
+          -re \
+          -f lavfi \
+          -i 'testsrc2=size=160x90:rate=10,hue=h=45' \
+          -re \
+          -f lavfi \
+          -i 'sine=frequency=1320:sample_rate=48000' \
+          -t 2 \
+          -c:v mpeg2video \
+          -g 10 \
+          -bf 0 \
+          -c:a mp2 \
+          -b:a 96k \
+          -f mpegts \
+          'srt://same-id-receiver:32200?mode=caller&streamid=shared-camera&passphrase=kinugasa-aes256-pass&pbkeylen=32'
+
+  same-id-verifier:
+    <<: *runtime-image
+    depends_on:
+      same-id-receiver:
+        condition: service_started
+      same-id-sender-a:
+        condition: service_completed_successfully
+      same-id-sender-b:
+        condition: service_completed_successfully
+    volumes:
+      - artifacts:/artifacts
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        timeout 20 bash -c 'until test -f /artifacts/same-id.done; do sleep 0.1; done'
+        test -s /artifacts/same-id.ts
+        test "$(stat -c '%s' /artifacts/same-id.ts)" -gt 100000
+        ffprobe \
+          -hide_banner \
+          -loglevel error \
+          -select_streams v:0 \
+          -show_entries stream=codec_name \
+          -of csv=p=0 \
+          /artifacts/same-id.ts | grep -q '^mpeg2video'
+
+  multi-id-receiver:
+    <<: *runtime-image
+    volumes:
+      - artifacts:/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/receiver.ready"]
+      interval: 100ms
+      timeout: 1s
+      retries: 50
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        rm -f /artifacts/multi-id.done /artifacts/multi-id-a.ts /artifacts/multi-id-b.ts
+        touch /tmp/receiver.ready
+        srt-receive-multi-stream \
+          --url 'srt://0.0.0.0:32210?mode=listener' \
+          --stream-id camera-a \
+          --stream-id camera-b \
+          --stream-output camera-a=/artifacts/multi-id-a.ts \
+          --stream-output camera-b=/artifacts/multi-id-b.ts \
+          --duration 12 \
+          --passphrase kinugasa-aes256-pass \
+          --pbkeylen 32
+        touch /artifacts/multi-id.done
+        sleep 30
+
+  multi-id-sender-a:
+    <<: *runtime-image
+    depends_on:
+      multi-id-receiver:
+        condition: service_healthy
+    volumes:
+      - artifacts:/artifacts
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        protocol_e2e \
+          --duration 2 \
+          --startup-delay 3 \
+          --receiver-timeout 18 \
+          --ignore-sender-exit-status \
+          --sender-url 'srt://multi-id-receiver:32210?mode=caller&streamid=camera-a&passphrase=kinugasa-aes256-pass&pbkeylen=32' \
+          --receiver-done /artifacts/multi-id.done \
+          --output /artifacts/multi-id-a.ts \
+          --compare none
+
+  multi-id-sender-b:
+    <<: *runtime-image
+    depends_on:
+      multi-id-receiver:
+        condition: service_healthy
+    volumes:
+      - artifacts:/artifacts
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        protocol_e2e \
+          --duration 2 \
+          --startup-delay 3 \
+          --receiver-timeout 18 \
+          --ignore-sender-exit-status \
+          --sender-url 'srt://multi-id-receiver:32210?mode=caller&streamid=camera-b&passphrase=kinugasa-aes256-pass&pbkeylen=32' \
+          --receiver-done /artifacts/multi-id.done \
+          --output /artifacts/multi-id-b.ts \
+          --compare none
+
+  multi-id-verifier:
+    <<: *runtime-image
+    depends_on:
+      multi-id-sender-a:
+        condition: service_completed_successfully
+      multi-id-sender-b:
+        condition: service_completed_successfully
+    volumes:
+      - artifacts:/artifacts
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        for output in /artifacts/multi-id-a.ts /artifacts/multi-id-b.ts; do
+          test -s "$${output}"
+          ffprobe \
+            -hide_banner \
+            -loglevel error \
+            -select_streams v:0 \
+            -show_entries stream=codec_name \
+            -of csv=p=0 \
+            "$${output}" | grep -q '^mpeg2video'
+          ffprobe \
+            -hide_banner \
+            -loglevel error \
+            -select_streams a:0 \
+            -show_entries stream=codec_name \
+            -of csv=p=0 \
+            "$${output}" | grep -q '^mp2$'
+        done
+
+  dynamic-add-receiver:
+    <<: *runtime-image
+    volumes:
+      - artifacts:/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/receiver.ready"]
+      interval: 100ms
+      timeout: 1s
+      retries: 50
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        rm -f /artifacts/dynamic-add.done /artifacts/dynamic-add.ts
+        touch /tmp/receiver.ready
+        srt-receive-multi-stream \
+          --url 'srt://0.0.0.0:32220?mode=listener' \
+          --stream-output camera-added=/artifacts/dynamic-add.ts \
+          --add-stream-id-after camera-added:2 \
+          --duration 12 \
+          --passphrase kinugasa-aes256-pass \
+          --pbkeylen 32
+        touch /artifacts/dynamic-add.done
+        sleep 30
+
+  dynamic-add-sender:
+    <<: *runtime-image
+    depends_on:
+      dynamic-add-receiver:
+        condition: service_healthy
+    volumes:
+      - artifacts:/artifacts
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        protocol_e2e \
+          --duration 2 \
+          --startup-delay 4 \
+          --receiver-timeout 18 \
+          --ignore-sender-exit-status \
+          --sender-url 'srt://dynamic-add-receiver:32220?mode=caller&streamid=camera-added&passphrase=kinugasa-aes256-pass&pbkeylen=32' \
+          --receiver-done /artifacts/dynamic-add.done \
+          --output /artifacts/dynamic-add.ts \
+          --compare none
+
+  dynamic-add-verifier:
+    <<: *runtime-image
+    depends_on:
+      dynamic-add-sender:
+        condition: service_completed_successfully
+    volumes:
+      - artifacts:/artifacts
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        test -s /artifacts/dynamic-add.ts
+        ffprobe \
+          -hide_banner \
+          -loglevel error \
+          -select_streams v:0 \
+          -show_entries stream=codec_name \
+          -of csv=p=0 \
+          /artifacts/dynamic-add.ts | grep -q '^mpeg2video'
+
+  dynamic-remove-receiver:
+    <<: *runtime-image
+    volumes:
+      - artifacts:/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/receiver.ready"]
+      interval: 100ms
+      timeout: 1s
+      retries: 50
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        rm -f /artifacts/dynamic-remove.done /artifacts/dynamic-remove.ts
+        touch /tmp/receiver.ready
+        srt-receive-multi-stream \
+          --url 'srt://0.0.0.0:32230?mode=listener' \
+          --stream-id camera-removed \
+          --stream-output camera-removed=/artifacts/dynamic-remove.ts \
+          --remove-stream-id-after camera-removed:2 \
+          --duration 10 \
+          --passphrase kinugasa-aes256-pass \
+          --pbkeylen 32
+        touch /artifacts/dynamic-remove.done
+        sleep 30
+
+  dynamic-remove-rejected-sender:
+    <<: *runtime-image
+    depends_on:
+      dynamic-remove-receiver:
+        condition: service_healthy
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        sleep 4
+        if ffmpeg \
+          -hide_banner \
+          -loglevel error \
+          -y \
+          -re \
+          -f lavfi \
+          -i 'testsrc2=size=160x90:rate=10' \
+          -t 2 \
+          -c:v mpeg2video \
+          -g 10 \
+          -bf 0 \
+          -f mpegts \
+          'srt://dynamic-remove-receiver:32230?mode=caller&streamid=camera-removed&passphrase=kinugasa-aes256-pass&pbkeylen=32'; then
+          echo 'expected removed stream ID connection to be rejected' >&2
+          exit 1
+        fi
+
+  dynamic-remove-verifier:
+    <<: *runtime-image
+    depends_on:
+      dynamic-remove-receiver:
+        condition: service_started
+      dynamic-remove-rejected-sender:
+        condition: service_completed_successfully
+    volumes:
+      - artifacts:/artifacts
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        timeout 16 bash -c 'until test -f /artifacts/dynamic-remove.done; do sleep 0.1; done'
+        if test -e /artifacts/dynamic-remove.ts; then
+          test ! -s /artifacts/dynamic-remove.ts
+        fi
+
+  test-of-kinugasa-gst-srt-multi-streamid:
+    <<: *runtime-image
+    depends_on:
+      same-id-verifier:
+        condition: service_completed_successfully
+      multi-id-verifier:
+        condition: service_completed_successfully
+      dynamic-add-verifier:
+        condition: service_completed_successfully
+      dynamic-remove-verifier:
+        condition: service_completed_successfully
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        echo 'kinugasa-gst::srt multi-stream-id E2E passed'
+
+volumes:
+  artifacts:

@@ -1051,7 +1051,9 @@ dependencies = [
  "gstreamer",
  "gstreamer-base",
  "kinugasa-core",
+ "libc",
  "librist",
+ "pkg-config",
  "thiserror",
 ]
 

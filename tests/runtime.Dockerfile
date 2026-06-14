@@ -9,6 +9,7 @@ RUN apt-get update \
         git \
         libgstreamer1.0-dev \
         libgstreamer-plugins-base1.0-dev \
+        libsrt-gnutls-dev \
         libclang-dev \
         meson \
         ninja-build \
@@ -22,10 +23,12 @@ WORKDIR /src
 COPY . .
 
 ENV LIBRIST_SRC=/opt/librist-src
+ENV LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
 RUN cargo build \
     -p kinugasa-test-tools --bin protocol_e2e \
     -p kinugasa-gst --bin rist_receive \
-    -p kinugasa-gst --bin srt_receive
+    -p kinugasa-gst --bin srt_receive \
+    -p kinugasa-gst --bin srt-receive-multi-stream
 
 FROM debian:bookworm-slim AS runtime
 
@@ -37,10 +40,13 @@ RUN apt-get update \
         gstreamer1.0-plugins-bad \
         libgstreamer1.0-0 \
         libgstreamer-plugins-base1.0-0 \
+        libsrt1.5-gnutls \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/target/debug/protocol_e2e /usr/local/bin/protocol_e2e
 COPY --from=builder /src/target/debug/rist_receive /usr/local/bin/rist_receive
 COPY --from=builder /src/target/debug/srt_receive /usr/local/bin/srt_receive
+COPY --from=builder /src/target/debug/srt-receive-multi-stream /usr/local/bin/srt-receive-multi-stream
+COPY --from=builder /src/target/debug/srt-receive-multi-stream /usr/local/bin/srt_receive_multi_stream
 
 WORKDIR /test
