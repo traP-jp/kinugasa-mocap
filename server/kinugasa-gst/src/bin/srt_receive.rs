@@ -12,25 +12,29 @@ fn main() -> Result<()> {
 
 struct Config {
     url: String,
+    stream_id: String,
     output: PathBuf,
     duration: Duration,
-    profile: String,
+    passphrase: String,
+    pbkeylen: u32,
 }
 
 fn run_receiver(config: &Config) -> Result<()> {
     gst::init().context("failed to initialize GStreamer")?;
-    kinugasa_gst::rist::register(None).context("failed to register ristserversrc")?;
+    kinugasa_gst::srt::register(None).context("failed to register kinugasasrtserversrc")?;
 
     let output = config
         .output
         .to_str()
         .context("--output must be valid UTF-8 for GStreamer filesink")?;
 
-    let source = gst::ElementFactory::make("ristserversrc")
-        .property("url", &config.url)
-        .property("profile", &config.profile)
+    let source = gst::ElementFactory::make("kinugasasrtserversrc")
+        .property("uri", &config.url)
+        .property("stream-ids", &config.stream_id)
+        .property("passphrase", &config.passphrase)
+        .property("pbkeylen", config.pbkeylen)
         .build()
-        .context("failed to create ristserversrc")?;
+        .context("failed to create kinugasasrtserversrc")?;
     let sink = gst::ElementFactory::make("filesink")
         .property("location", output)
         .build()
@@ -40,7 +44,7 @@ fn run_receiver(config: &Config) -> Result<()> {
     pipeline
         .add_many([&source, &sink])
         .context("failed to add elements to pipeline")?;
-    gst::Element::link_many([&source, &sink]).context("failed to link RIST source to filesink")?;
+    gst::Element::link_many([&source, &sink]).context("failed to link SRT source to filesink")?;
 
     pipeline
         .set_state(gst::State::Playing)
@@ -87,25 +91,31 @@ fn wait_for_completion(pipeline: &gst::Pipeline, duration: Duration) -> Result<(
 
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Config> {
     let mut url = None;
+    let mut stream_id = None;
     let mut output = None;
     let mut duration = Duration::from_secs(5);
-    let mut profile = "simple".to_string();
+    let mut passphrase = String::new();
+    let mut pbkeylen = 32;
     let mut args = args.into_iter();
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--url" => url = Some(next_value(&mut args, "--url")?),
+            "--stream-id" => stream_id = Some(next_value(&mut args, "--stream-id")?),
             "--output" => output = Some(PathBuf::from(next_value(&mut args, "--output")?)),
+            "--passphrase" => passphrase = next_value(&mut args, "--passphrase")?,
+            "--pbkeylen" => {
+                pbkeylen = next_value(&mut args, "--pbkeylen")?
+                    .parse()
+                    .context("--pbkeylen must be 0, 16, 24, or 32")?;
+                ensure_pbkeylen(pbkeylen)?;
+            }
             "--duration" => {
                 duration = Duration::from_secs_f64(
                     next_value(&mut args, "--duration")?
                         .parse()
                         .context("--duration must be seconds")?,
                 );
-            }
-            "--profile" => {
-                profile = next_value(&mut args, "--profile")?;
-                ensure_profile(&profile)?;
             }
             "--help" | "-h" => {
                 print_help();
@@ -115,20 +125,22 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Config> {
         }
     }
 
-    ensure_profile(&profile)?;
+    ensure_pbkeylen(pbkeylen)?;
 
     Ok(Config {
         url: url.context("--url is required")?,
+        stream_id: stream_id.context("--stream-id is required")?,
         output: output.context("--output is required")?,
         duration,
-        profile,
+        passphrase,
+        pbkeylen,
     })
 }
 
-fn ensure_profile(profile: &str) -> Result<()> {
-    match profile {
-        "simple" | "main" | "advanced" => Ok(()),
-        _ => bail!("unknown RIST profile: {profile}"),
+fn ensure_pbkeylen(pbkeylen: u32) -> Result<()> {
+    match pbkeylen {
+        0 | 16 | 24 | 32 => Ok(()),
+        _ => bail!("--pbkeylen must be 0, 16, 24, or 32"),
     }
 }
 
@@ -140,15 +152,17 @@ fn next_value(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<Str
 fn print_help() {
     println!(
         "\
-Receive RIST input with GStreamer and write the raw payload to a TS file.
+Receive SRT input with kinugasa_gst::srt and write the raw payload to a TS file.
 
 Required:
-  --url URL          RIST receiver URL, for example rist://@127.0.0.1:1234
+  --url URL          SRT receiver URL, for example srt://0.0.0.0:1234?mode=listener
+  --stream-id ID     accepted SRT stream id
   --output PATH      output TS file path
 
 Optional:
   --duration SEC     receive duration. Default: 5
-  --profile NAME     simple, main, or advanced. Default: simple
+  --passphrase TEXT  SRT encryption passphrase. Empty by default
+  --pbkeylen BYTES   0, 16, 24, or 32. Default: 32
 "
     );
 }

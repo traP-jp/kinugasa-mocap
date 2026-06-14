@@ -5,6 +5,16 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+gst.workspace = true
+gst_base.workspace = true
 kinugasa-core = { path = "../kinugasa-core" }
+libc = "0.2"
 librist = { path = "../librist" }
 thiserror.workspace = true
+
+[[bin]]
+name = "srt-receive-multi-stream"
+path = "src/bin/srt_receive_multi_stream.rs"
+
+[build-dependencies]
+pkg-config = "0.3"
