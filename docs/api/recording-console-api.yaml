@@ -605,31 +605,6 @@ paths:
                 $ref: "#/components/schemas/LogSegment"
         "404":
           $ref: "#/components/responses/NotFound"
-    post:
-      tags:
-        - Logs
-      operationId: appendStudioLog
-      summary: Append a studio log
-      parameters:
-        - $ref: "#/components/parameters/StudioId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AppendStudioLogRequest"
-      responses:
-        "201":
-          description: The studio log was appended.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StudioLog"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-
 components:
   parameters:
     CameraId:
@@ -736,19 +711,6 @@ components:
           const: 0
         payload:
           $ref: "#/components/schemas/StudioEventPayload"
-      additionalProperties: false
-
-    AppendStudioLogRequest:
-      type: object
-      required:
-        - level
-        - message
-      properties:
-        level:
-          $ref: "#/components/schemas/LogLevel"
-        message:
-          type: string
-          minLength: 1
       additionalProperties: false
 
     Camera:
