@@ -811,7 +811,6 @@ components:
       required:
         - cameras
         - completed_takes
-        - ongoing_take
       properties:
         cameras:
           type: array
@@ -824,7 +823,6 @@ components:
         ongoing_take:
           anyOf:
             - $ref: "#/components/schemas/Take"
-            - type: "null"
 
     MocapStudioStatus:
       type: string
