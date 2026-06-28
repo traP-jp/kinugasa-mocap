@@ -1,0 +1,198 @@
+// Architecture schema for the recording console database.
+// This is a readable Prisma representation of recording_console_db.puml.
+// Some database CHECK constraints are documented as comments because Prisma
+// schema syntax does not model arbitrary CHECK expressions.
+
+// IMPORTANT: No delete operations should be performed on this database.
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  displayName String   @map("display_name") @db.Text
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  externalIdentities ExternalIdentity[]
+  teamMemberships    TeamMembership[]
+
+  @@map("users")
+}
+
+model ExternalIdentity {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  provider  String   @db.Text
+  issuer    String   @db.Text
+  subject   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, issuer, subject])
+  @@index([userId])
+  @@map("external_identities")
+}
+
+model Team {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships       TeamMembership[]
+  recordingSessions RecordingSession[]
+
+  @@map("teams")
+}
+
+model TeamMembership {
+  id        String         @id @default(uuid()) @db.Uuid
+  teamId    String         @map("team_id") @db.Uuid
+  userId    String         @map("user_id") @db.Uuid
+  role      MembershipRole
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  team Team @relation(fields: [teamId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@map("team_memberships")
+}
+
+model RecordingSession {
+  id        String                 @id @default(uuid()) @db.Uuid
+  teamId    String                 @map("team_id") @db.Uuid
+  name      String                 @db.Text
+  status    RecordingSessionStatus @default(idle)
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  team    Team                  @relation(fields: [teamId], references: [id])
+  cameras Camera[]
+  takes   Take[]                @relation("RecordingSessionTakes")
+  logs    RecordingSessionLog[]
+
+  @@index([teamId])
+  @@map("recording_sessions")
+}
+
+model Camera {
+  id                  String   @id @default(uuid()) @db.Uuid
+  recordingSessionId  String   @map("recording_session_id") @db.Uuid
+  name                String   @db.Text
+  cameraConfiguration Json     @map("camera_configuration") @db.JsonB
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  recordingSession RecordingSession @relation(fields: [recordingSessionId], references: [id])
+  videos           Video[]          @relation("CameraVideos")
+  ongoingVideo     OngoingVideo?
+
+  @@unique([recordingSessionId, id])
+  @@unique([recordingSessionId, name])
+  @@map("cameras")
+}
+
+model Take {
+  id                 String   @id @default(uuid()) @db.Uuid
+  recordingSessionId String   @map("recording_session_id") @db.Uuid
+  takeSequenceNumber Int      @map("take_sequence_number")
+  startedAt          DateTime @map("started_at") @db.Timestamptz(6)
+  endedAt            DateTime @map("ended_at") @db.Timestamptz(6)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  recordingSession RecordingSession @relation("RecordingSessionTakes", fields: [recordingSessionId], references: [id])
+  videos           Video[]          @relation("TakeVideos")
+
+  @@unique([recordingSessionId, id])
+  @@unique([recordingSessionId, takeSequenceNumber])
+  @@map("takes")
+}
+
+model Video {
+  id                      String   @id @default(uuid()) @db.Uuid
+  recordingSessionId      String   @map("recording_session_id") @db.Uuid
+  takeId                  String   @map("take_id") @db.Uuid
+  cameraId                String   @map("camera_id") @db.Uuid
+  deferredVideoArtifactId String   @map("deferred_video_artifact_id") @db.Uuid
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  take                  Take                  @relation("TakeVideos", fields: [recordingSessionId, takeId], references: [recordingSessionId, id])
+  camera                Camera                @relation("CameraVideos", fields: [recordingSessionId, cameraId], references: [recordingSessionId, id])
+  deferredVideoArtifact DeferredVideoArtifact @relation("VideoArtifact", fields: [deferredVideoArtifactId], references: [id])
+
+  @@unique([takeId, cameraId])
+  @@unique([deferredVideoArtifactId])
+  @@index([recordingSessionId, takeId])
+  @@index([recordingSessionId, cameraId])
+  @@map("videos")
+}
+
+model OngoingVideo {
+  id                      String   @id @default(uuid()) @db.Uuid
+  recordingSessionId      String   @map("recording_session_id") @db.Uuid
+  cameraId                String   @map("camera_id") @db.Uuid
+  deferredVideoArtifactId String   @map("deferred_video_artifact_id") @db.Uuid
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  camera                Camera                @relation(fields: [recordingSessionId, cameraId], references: [recordingSessionId, id])
+  deferredVideoArtifact DeferredVideoArtifact @relation("OngoingVideoArtifact", fields: [deferredVideoArtifactId], references: [id])
+
+  @@unique([recordingSessionId, cameraId])
+  @@unique([deferredVideoArtifactId])
+  @@map("ongoing_videos")
+}
+
+model RecordingSessionLog {
+  id                 String   @id @default(uuid()) @db.Uuid
+  recordingSessionId String   @map("recording_session_id") @db.Uuid
+  logLevel           LogLevel @map("log_level")
+  message            String   @db.Text
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  recordingSession RecordingSession @relation(fields: [recordingSessionId], references: [id])
+
+  @@index([recordingSessionId])
+  @@map("recording_session_logs")
+}
+
+model DeferredVideoArtifact {
+  id           String        @id @default(uuid()) @db.Uuid
+  key          String        @db.Text
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  video        Video?        @relation("VideoArtifact")
+  ongoingVideo OngoingVideo? @relation("OngoingVideoArtifact")
+
+  // CONSTRAINT: an artifact may be referenced by either one video or one ongoing_video, but not both.
+  @@unique([key])
+  @@map("deferred_video_artifacts")
+}
+
+enum MembershipRole {
+  admin
+  member
+}
+
+enum RecordingSessionStatus {
+  capturing
+  idle
+  closed
+}
+
+enum LogLevel {
+  error
+  warn
+  info
+  debug
+  trace
+}
