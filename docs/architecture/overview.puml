@@ -14,20 +14,18 @@ rectangle "Kinugasa Admin Managed Components" as KinugasaAdminManaged {
 	component "Console Server" as RecordingServer
 
 	component "LiveKit Server" as LiveKitServer
-	component "RIST Server" as RISTServer
 
 	storage "RecordingStorage" as RecordingStorage
-	RISTServer --> RecordingStorage : Upload
-	RISTServer --> LiveKitServer : Stream (WebRTC)
+	RecordingServer --> RecordingStorage : Upload
+	RecordingServer --> LiveKitServer : Stream (WebRTC)
 	LiveKitServer --> RecordingWebUI : Stream (WebRTC)
 	RecordingServer --> RecordingStorage : Control (S3 API)
 	RecordingServer --> LiveKitServer : Control (LiveKit API)
-	RecordingServer --> RISTServer : Control (gRPC)
 	RecordingWebUI <-> RecordingServer
 }
 
 
-Camera "*" --> "1" RISTServer : Stream (RIST)
+Camera "*" --> "1" RecordingServer : Stream (RIST or SRT)
 MocapTeam --> RecordingWebUI
 RecordingStorage <-- Runner : Download
 
