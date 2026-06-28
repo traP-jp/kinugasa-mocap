@@ -63,6 +63,8 @@
               graphviz
               plantuml
               jdk21
+              # Prisma
+              prisma
 
               config.packages."ci:treefmt:sync"
               config.packages.rust-toolchain
