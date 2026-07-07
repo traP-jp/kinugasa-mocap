@@ -1,7 +1,0 @@
-[package]
-name = "librist"
-edition.workspace = true
-
-[build-dependencies]
-bindgen.workspace = true
-tempfile.workspace = true

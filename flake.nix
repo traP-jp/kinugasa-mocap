@@ -28,7 +28,6 @@
       systems = import inputs.systems;
 
       imports = [
-        ./docs
         ./treefmt.nix
         ./rust-toolchain.nix
       ];
