@@ -28,8 +28,21 @@ nix run .#recording:down
 Set `IMAGE`, `CLUSTER`, or `HOST_PORT` to override the defaults.
 
 Sample resources live in `recording/config/samples`. They are not applied by
-`recording:up`; apply them explicitly after creating the required LiveKit and
-S3 Secrets.
+`recording:up`; apply them explicitly after creating the required S3 Secrets.
+
+`recording:up` also deploys one in-cluster LiveKit stack in the
+`recording-system` namespace:
+
+- `livekit-server`
+- `livekit-ingress`
+- `livekit-redis`
+
+The local k3d cluster exposes LiveKit HTTP on `localhost:7880` and RTMP ingress
+on `localhost:1935`.
+
+The recording operator creates one LiveKit WHIP ingress per `Stream` by using
+the LiveKit Go SDK. The generated WHIP URL is stored in a Kubernetes Secret and
+mounted into the relay Pod through an environment variable.
 
 ## Test Inputs
 

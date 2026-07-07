@@ -9,7 +9,6 @@ spec:
     port: 9000
     nodePort: 30900
   livekit:
-    mock: true
     room: studio-a
   recording:
     protocol: srt

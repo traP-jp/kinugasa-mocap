@@ -44,8 +44,11 @@ go run . --enable-operator
 
 Operator mode starts the HTTP API and reconciles:
 
-- `Stream` into a single-replica relay Deployment and UDP Service. The relay container runs FFmpeg and forwards to the configured LiveKit output URL, or to a local null sink when `spec.livekit.mock` is true.
+- `Stream` into a LiveKit WHIP ingress, a Secret containing the generated WHIP URL, a single-replica relay Deployment, and a UDP Service. The relay container runs FFmpeg and forwards to LiveKit continuously.
 - `Recording` into a Job with `restartPolicy: Never` and `backoffLimit: 0`. The Pod has a recorder container and an uploader container. The recorder runs FFmpeg into a shared `emptyDir`; the uploader runs rclone and uploads that file to the server-selected S3 object key from `spec.output.s3.objectKey`.
+
+If `Stream.spec.livekit.url` is set, the operator treats that URL as an
+externally managed LiveKit output and skips LiveKit ingress creation.
 
 Stop requests are written to `Recording.spec.stopRequestedAt`. The operator patches the active recorder Pod annotation and exposes it through a Downward API file at `/var/run/kinugasa/recording-control/stop-requested-at`, so the recorder can finalize and upload before exiting.
 
@@ -60,7 +63,11 @@ Images can be set with:
 go run . --enable-operator \
   --stream-relay-image=linuxserver/ffmpeg:latest \
   --recording-recorder-image=linuxserver/ffmpeg:latest \
-  --recording-uploader-image=rclone/rclone:latest
+  --recording-uploader-image=rclone/rclone:latest \
+  --livekit-url=http://livekit-server.recording-system.svc.cluster.local:7880 \
+  --livekit-api-key=devkey \
+  --livekit-api-secret=secret \
+  --livekit-whip-base-url=http://livekit-ingress.recording-system.svc.cluster.local:8080/whip
 ```
 
 ## Cluster Run

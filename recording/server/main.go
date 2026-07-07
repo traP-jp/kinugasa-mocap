@@ -26,6 +26,10 @@ func main() {
 	relayImage := flag.String("stream-relay-image", "linuxserver/ffmpeg:latest", "image used for Stream relay pods; must provide /bin/sh and ffmpeg")
 	recorderImage := flag.String("recording-recorder-image", "linuxserver/ffmpeg:latest", "image used for one-shot Recording recorder containers; must provide /bin/sh and ffmpeg")
 	uploaderImage := flag.String("recording-uploader-image", "rclone/rclone:latest", "image used for one-shot Recording uploader containers; must provide /bin/sh and rclone")
+	liveKitURL := flag.String("livekit-url", "http://livekit-server.recording-system.svc.cluster.local:7880", "LiveKit server URL used by the operator")
+	liveKitAPIKey := flag.String("livekit-api-key", "devkey", "LiveKit API key used by the operator")
+	liveKitAPISecret := flag.String("livekit-api-secret", "secret", "LiveKit API secret used by the operator")
+	liveKitWHIPBaseURL := flag.String("livekit-whip-base-url", "http://livekit-ingress.recording-system.svc.cluster.local:8080/whip", "WHIP base URL exposed by LiveKit ingress inside the cluster")
 	metricsAddr := flag.String("metrics-bind-address", "0", "address for controller-runtime metrics; 0 disables metrics")
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
@@ -49,7 +53,13 @@ func main() {
 			RelayImage:    *relayImage,
 			RecorderImage: *recorderImage,
 			UploaderImage: *uploaderImage,
-			ZapOptions:    opts,
+			LiveKit: k8s.LiveKitIngressOptions{
+				URL:         *liveKitURL,
+				APIKey:      *liveKitAPIKey,
+				APISecret:   *liveKitAPISecret,
+				WHIPBaseURL: *liveKitWHIPBaseURL,
+			},
+			ZapOptions: opts,
 		}); err != nil {
 			log.Fatal(err)
 		}
@@ -67,6 +77,7 @@ type operatorOptions struct {
 	RelayImage    string
 	RecorderImage string
 	UploaderImage string
+	LiveKit       k8s.LiveKitIngressOptions
 	ZapOptions    zap.Options
 }
 
@@ -89,10 +100,16 @@ func runOperator(ctx context.Context, apiServer *presentation.APIServer, options
 		return err
 	}
 
+	liveKitIngress, err := k8s.NewSDKLiveKitIngressManager(options.LiveKit)
+	if err != nil {
+		return err
+	}
+
 	if err := (&k8s.StreamReconciler{
-		Client:  mgr.GetClient(),
-		Scheme:  mgr.GetScheme(),
-		Options: k8s.StreamWorkloadOptions{RelayImage: options.RelayImage},
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		Options:        k8s.StreamWorkloadOptions{RelayImage: options.RelayImage},
+		LiveKitIngress: liveKitIngress,
 	}).SetupWithManager(mgr); err != nil {
 		return err
 	}

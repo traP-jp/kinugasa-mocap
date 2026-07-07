@@ -1,0 +1,194 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: recording-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livekit-server-config
+  namespace: recording-system
+data:
+  livekit.yaml: |
+    port: 7880
+    bind_addresses:
+      - ""
+    rtc:
+      tcp_port: 7881
+      udp_port: 7882
+      use_external_ip: false
+    redis:
+      address: livekit-redis.recording-system.svc.cluster.local:6379
+    keys:
+      devkey: secret
+    logging:
+      level: info
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livekit-ingress-config
+  namespace: recording-system
+data:
+  ingress.yaml: |
+    api_key: devkey
+    api_secret: secret
+    ws_url: ws://livekit-server.recording-system.svc.cluster.local:7880
+    redis:
+      address: livekit-redis.recording-system.svc.cluster.local:6379
+    rtmp_port: 1935
+    whip_port: 8080
+    logging:
+      level: info
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-redis
+  namespace: recording-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: livekit-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: livekit-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: redis
+              containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-redis
+  namespace: recording-system
+spec:
+  selector:
+    app.kubernetes.io/name: livekit-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-server
+  namespace: recording-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: livekit-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: livekit-server
+    spec:
+      containers:
+        - name: livekit
+          image: livekit/livekit-server:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config
+            - /etc/livekit/livekit.yaml
+          ports:
+            - name: http
+              containerPort: 7880
+            - name: rtc-tcp
+              containerPort: 7881
+            - name: rtc-udp
+              containerPort: 7882
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: livekit-server-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-server
+  namespace: recording-system
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: livekit-server
+  ports:
+    - name: http
+      port: 7880
+      targetPort: http
+      nodePort: 30880
+    - name: rtc-tcp
+      port: 7881
+      targetPort: rtc-tcp
+    - name: rtc-udp
+      port: 7882
+      targetPort: rtc-udp
+      protocol: UDP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-ingress
+  namespace: recording-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: livekit-ingress
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: livekit-ingress
+    spec:
+      containers:
+        - name: ingress
+          image: livekit/ingress:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config
+            - /etc/livekit-ingress/ingress.yaml
+          ports:
+            - name: rtmp
+              containerPort: 1935
+            - name: whip
+              containerPort: 8080
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit-ingress
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: livekit-ingress-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-ingress
+  namespace: recording-system
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: livekit-ingress
+  ports:
+    - name: rtmp
+      port: 1935
+      targetPort: rtmp
+      nodePort: 31935
+    - name: whip
+      port: 8080
+      targetPort: whip
+      nodePort: 31080

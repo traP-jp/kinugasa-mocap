@@ -33,12 +33,12 @@ type StreamInputSpec struct {
 }
 
 type LiveKitSpec struct {
-	Mock                bool               `json:"mock,omitempty"`
-	URL                 string             `json:"url"`
-	Room                string             `json:"room"`
-	TokenSecretRef      SecretKeyReference `json:"tokenSecretRef"`
-	ParticipantIdentity string             `json:"participantIdentity,omitempty"`
-	ParticipantName     string             `json:"participantName,omitempty"`
+	URL                 string              `json:"url,omitempty"`
+	Format              string              `json:"format,omitempty"`
+	Room                string              `json:"room"`
+	TokenSecretRef      *SecretKeyReference `json:"tokenSecretRef,omitempty"`
+	ParticipantIdentity string              `json:"participantIdentity,omitempty"`
+	ParticipantName     string              `json:"participantName,omitempty"`
 }
 
 type SecretKeyReference struct {
@@ -58,6 +58,8 @@ type StreamStatus struct {
 	PodName            string      `json:"podName,omitempty"`
 	ServiceName        string      `json:"serviceName,omitempty"`
 	RecordingEndpoint  string      `json:"recordingEndpoint,omitempty"`
+	LiveKitIngressID   string      `json:"livekitIngressID,omitempty"`
+	LiveKitSecretName  string      `json:"livekitSecretName,omitempty"`
 	LiveKitConnected   bool        `json:"livekitConnected,omitempty"`
 	Error              string      `json:"error,omitempty"`
 	Conditions         []Condition `json:"conditions,omitempty"`
@@ -145,6 +147,10 @@ func (in *Stream) DeepCopyObject() runtime.Object {
 	out := new(Stream)
 	*out = *in
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	if in.Spec.LiveKit.TokenSecretRef != nil {
+		tokenSecretRef := *in.Spec.LiveKit.TokenSecretRef
+		out.Spec.LiveKit.TokenSecretRef = &tokenSecretRef
+	}
 	out.Status.Conditions = append([]Condition(nil), in.Status.Conditions...)
 	return out
 }

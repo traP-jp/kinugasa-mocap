@@ -27,16 +27,22 @@
           CLUSTER=''${CLUSTER:-kinugasa-mocap}
           SRT_HOST_PORT=''${SRT_HOST_PORT:-9000}
           RIST_HOST_PORT=''${RIST_HOST_PORT:-9001}
+          LIVEKIT_HOST_PORT=''${LIVEKIT_HOST_PORT:-7880}
+          LIVEKIT_RTMP_HOST_PORT=''${LIVEKIT_RTMP_HOST_PORT:-1935}
           SRT_NODE_PORT=''${SRT_NODE_PORT:-30900}
           RIST_NODE_PORT=''${RIST_NODE_PORT:-30901}
+          LIVEKIT_NODE_PORT=''${LIVEKIT_NODE_PORT:-30880}
+          LIVEKIT_RTMP_NODE_PORT=''${LIVEKIT_RTMP_NODE_PORT:-31935}
 
           if k3d cluster list "$CLUSTER" >/dev/null 2>&1; then
             echo "k3d cluster $CLUSTER already exists"
-            echo "test UDP port mappings are only added when the cluster is created; run recording:down and recording:up if they are missing"
+            echo "test UDP and LiveKit port mappings are only added when the cluster is created; run recording:down and recording:up if they are missing"
           else
             k3d cluster create "$CLUSTER" \
               --port "$SRT_HOST_PORT:$SRT_NODE_PORT/udp@server:0" \
-              --port "$RIST_HOST_PORT:$RIST_NODE_PORT/udp@server:0"
+              --port "$RIST_HOST_PORT:$RIST_NODE_PORT/udp@server:0" \
+              --port "$LIVEKIT_HOST_PORT:$LIVEKIT_NODE_PORT/tcp@server:0" \
+              --port "$LIVEKIT_RTMP_HOST_PORT:$LIVEKIT_RTMP_NODE_PORT/tcp@server:0"
           fi
         '';
       };
@@ -65,8 +71,13 @@
           kubectl apply -f "$GIT_ROOT/recording/config/crds"
           kubectl wait --for condition=Established crd/recordings.recording.kinugasa.dev --timeout=60s
           kubectl wait --for condition=Established crd/streams.recording.kinugasa.dev --timeout=60s
+          kubectl apply -f "$GIT_ROOT/recording/config/livekit.yaml"
+          kubectl rollout status deployment/livekit-redis -n recording-system --timeout=120s
+          kubectl rollout status deployment/livekit-server -n recording-system --timeout=180s
+          kubectl rollout status deployment/livekit-ingress -n recording-system --timeout=180s
           kubectl apply -f "$GIT_ROOT/recording/config/server.yaml"
           kubectl set image deployment/recording-server "server=$IMAGE" -n recording-system
+          kubectl rollout restart deployment/recording-server -n recording-system
           kubectl rollout status deployment/recording-server -n recording-system --timeout=120s
         '';
       };
@@ -124,6 +135,14 @@
         runtimeInputs = with pkgs; [ kubectl ];
         text = ''
           kubectl logs -n recording-system deployment/recording-server -f
+        '';
+      };
+
+      packages."recording:livekit-logs" = pkgs.writeShellApplication {
+        name = "recording-livekit-logs";
+        runtimeInputs = with pkgs; [ kubectl ];
+        text = ''
+          kubectl logs -n recording-system deployment/livekit-server -f
         '';
       };
 
@@ -230,6 +249,10 @@
       apps."recording:logs" = {
         type = "app";
         program = "${config.packages."recording:logs"}/bin/recording-logs";
+      };
+      apps."recording:livekit-logs" = {
+        type = "app";
+        program = "${config.packages."recording:livekit-logs"}/bin/recording-livekit-logs";
       };
       apps."recording:send-srt" = {
         type = "app";

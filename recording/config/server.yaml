@@ -18,6 +18,15 @@ rules:
       - recording.kinugasa.dev
     resources:
       - streams
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+  - apiGroups:
+      - recording.kinugasa.dev
+    resources:
       - recordings
     verbs:
       - get
@@ -67,6 +76,7 @@ rules:
       - ""
     resources:
       - services
+      - secrets
     verbs:
       - get
       - list
@@ -74,6 +84,7 @@ rules:
       - create
       - update
       - patch
+      - delete
   - apiGroups:
       - ""
     resources:

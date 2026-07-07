@@ -13,6 +13,8 @@ import (
 const (
 	defaultRecordingProtocol = "srt"
 	defaultRecordingPort     = int32(10000)
+	liveKitIngressURLKey     = "url"
+	liveKitStreamKeyKey      = "streamKey"
 )
 
 type StreamWorkloadOptions struct {
@@ -22,6 +24,7 @@ type StreamWorkloadOptions struct {
 func BuildStreamDeployment(stream *domain.Stream, options StreamWorkloadOptions) *appsv1.Deployment {
 	replicas := int32(1)
 	labels := streamLabels(stream)
+	annotations := streamPodAnnotations(stream)
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -33,7 +36,10 @@ func BuildStreamDeployment(stream *domain.Stream, options StreamWorkloadOptions)
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      labels,
+					Annotations: annotations,
+				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{streamRelayContainer(stream, options)},
 				},
@@ -45,6 +51,7 @@ func BuildStreamDeployment(stream *domain.Stream, options StreamWorkloadOptions)
 func UpdateStreamDeployment(deployment *appsv1.Deployment, stream *domain.Stream, options StreamWorkloadOptions) bool {
 	replicas := int32(1)
 	labels := streamLabels(stream)
+	annotations := streamPodAnnotations(stream)
 	containers := []corev1.Container{streamRelayContainer(stream, options)}
 	changed := false
 
@@ -62,6 +69,10 @@ func UpdateStreamDeployment(deployment *appsv1.Deployment, stream *domain.Stream
 	}
 	if !equality.Semantic.DeepEqual(deployment.Spec.Template.Labels, labels) {
 		deployment.Spec.Template.Labels = labels
+		changed = true
+	}
+	if !equality.Semantic.DeepEqual(deployment.Spec.Template.Annotations, annotations) {
+		deployment.Spec.Template.Annotations = annotations
 		changed = true
 	}
 	if !equality.Semantic.DeepEqual(deployment.Spec.Template.Spec.Containers, containers) {
@@ -129,11 +140,15 @@ func streamRelayContainer(stream *domain.Stream, options StreamWorkloadOptions) 
 func streamRelayEnv(stream *domain.Stream) []corev1.EnvVar {
 	env := []corev1.EnvVar{
 		{Name: "INPUT_URI", Value: stream.Spec.Input.URI},
-		{Name: "LIVEKIT_OUTPUT_URI", Value: liveKitOutput(stream)},
+		liveKitOutputEnvVar(stream),
 		{Name: "LIVEKIT_OUTPUT_OPTIONS", Value: liveKitOutputOptions(stream)},
+		{Name: "RELAY_CODEC_ARGS", Value: relayCodecArgs(stream)},
+		{Name: "RECORDING_FANOUT_URI", Value: "udp://127.0.0.1:23000?pkt_size=1316"},
 		{Name: "RECORDING_OUTPUT_URI", Value: recordingOutput(stream)},
 	}
-	if !stream.Spec.LiveKit.Mock {
+	if stream.Spec.LiveKit.TokenSecretRef != nil &&
+		stream.Spec.LiveKit.TokenSecretRef.Name != "" &&
+		stream.Spec.LiveKit.TokenSecretRef.Key != "" {
 		env = append(env, corev1.EnvVar{
 			Name: "LIVEKIT_TOKEN",
 			ValueFrom: &corev1.EnvVarSource{
@@ -147,6 +162,25 @@ func streamRelayEnv(stream *domain.Stream) []corev1.EnvVar {
 	return env
 }
 
+func liveKitOutputEnvVar(stream *domain.Stream) corev1.EnvVar {
+	if stream.Spec.LiveKit.URL != "" {
+		return corev1.EnvVar{Name: "LIVEKIT_OUTPUT_URI", Value: stream.Spec.LiveKit.URL}
+	}
+	secretName := stream.Status.LiveKitSecretName
+	if secretName == "" {
+		secretName = liveKitSecretName(stream)
+	}
+	return corev1.EnvVar{
+		Name: "LIVEKIT_OUTPUT_URI",
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+				Key:                  liveKitIngressURLKey,
+			},
+		},
+	}
+}
+
 func streamRelayScript() string {
 	return strings.TrimSpace(`
 auth_headers=""
@@ -154,32 +188,56 @@ if [ -n "${LIVEKIT_TOKEN:-}" ]; then
   auth_headers="-headers Authorization: Bearer ${LIVEKIT_TOKEN}"
 fi
 
+recording_fanout() {
+  while true; do
+    ffmpeg -hide_banner -loglevel info \
+      -i "udp://127.0.0.1:23000?fifo_size=1000000&overrun_nonfatal=1" \
+      -map 0 \
+      -c copy \
+      -f mpegts \
+      "${RECORDING_OUTPUT_URI}" || true
+    sleep 1
+  done
+}
+
+recording_fanout &
+recording_pid="$!"
+trap 'kill "${recording_pid}" 2>/dev/null || true' INT TERM EXIT
+
 ffmpeg -hide_banner -loglevel info \
   -i "${INPUT_URI}" \
   -map 0 \
-  -c copy \
+  ${RELAY_CODEC_ARGS} \
   ${auth_headers} \
   -f tee \
-  "${LIVEKIT_OUTPUT_OPTIONS}${LIVEKIT_OUTPUT_URI}|${RECORDING_OUTPUT_URI}"
-`)
-}
-
-func liveKitOutput(stream *domain.Stream) string {
-	if stream.Spec.LiveKit.Mock {
-		return "/dev/null"
-	}
-	return stream.Spec.LiveKit.URL
+  "${LIVEKIT_OUTPUT_OPTIONS}${LIVEKIT_OUTPUT_URI}|[f=mpegts:onfail=ignore]${RECORDING_FANOUT_URI}"
+	`)
 }
 
 func liveKitOutputOptions(stream *domain.Stream) string {
-	if stream.Spec.LiveKit.Mock {
-		return "[f=null]"
+	format := stream.Spec.LiveKit.Format
+	if format == "" {
+		if stream.Spec.LiveKit.URL == "" {
+			format = "whip"
+		} else if strings.HasPrefix(stream.Spec.LiveKit.URL, "rtmp://") ||
+			strings.HasPrefix(stream.Spec.LiveKit.URL, "rtmps://") {
+			format = "flv"
+		} else {
+			format = "mpegts"
+		}
 	}
-	return "[f=mpegts]"
+	return "[f=" + format + "]"
 }
 
 func recordingOutput(stream *domain.Stream) string {
-	return "[f=mpegts]" + recordingProtocol(stream) + "://:" + int32String(recordingPort(stream)) + "?mode=listener"
+	return recordingProtocol(stream) + "://:" + int32String(recordingPort(stream)) + "?mode=listener"
+}
+
+func relayCodecArgs(stream *domain.Stream) string {
+	if stream.Spec.LiveKit.URL == "" || stream.Spec.LiveKit.Format == "whip" {
+		return "-c:v copy -c:a libopus -ac 2 -b:a 128k"
+	}
+	return "-c copy"
 }
 
 func streamServiceType(stream *domain.Stream) corev1.ServiceType {
@@ -233,12 +291,24 @@ func streamWorkloadName(stream *domain.Stream) string {
 	return resourceName("stream", stream.Name)
 }
 
+func liveKitSecretName(stream *domain.Stream) string {
+	return resourceName(streamWorkloadName(stream), "livekit")
+}
+
 func streamLabels(stream *domain.Stream) map[string]string {
 	return map[string]string{
 		"app.kubernetes.io/name":        "kinugasa-stream",
 		"app.kubernetes.io/managed-by":  "recording-server",
 		"recording.kinugasa.dev/stream": string(stream.UID),
 	}
+}
+
+func streamPodAnnotations(stream *domain.Stream) map[string]string {
+	annotations := map[string]string{}
+	if stream.Status.LiveKitIngressID != "" {
+		annotations["recording.kinugasa.dev/livekit-ingress-id"] = stream.Status.LiveKitIngressID
+	}
+	return annotations
 }
 
 func recordingProtocol(stream *domain.Stream) string {

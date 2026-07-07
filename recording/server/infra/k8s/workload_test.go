@@ -142,8 +142,9 @@ func TestBuildStreamWorkload(t *testing.T) {
 			},
 			LiveKit: domain.LiveKitSpec{
 				URL:            "wss://livekit.example.com",
+				Format:         "mpegts",
 				Room:           "room-a",
-				TokenSecretRef: domain.SecretKeyReference{Name: "livekit-token", Key: "token"},
+				TokenSecretRef: &domain.SecretKeyReference{Name: "livekit-token", Key: "token"},
 			},
 			Recording: domain.StreamRecordingSpec{
 				Protocol: "srt",
@@ -166,6 +167,8 @@ func TestBuildStreamWorkload(t *testing.T) {
 		"ffmpeg -hide_banner -loglevel info",
 		"-i \"${INPUT_URI}\"",
 		"auth_headers=\"-headers Authorization: Bearer ${LIVEKIT_TOKEN}\"",
+		"recording_fanout &",
+		"[f=mpegts:onfail=ignore]${RECORDING_FANOUT_URI}",
 	} {
 		if !containsSubstring(container.Args[0], want) {
 			t.Fatalf("relay script = %q, want substring %q", container.Args[0], want)
@@ -175,6 +178,8 @@ func TestBuildStreamWorkload(t *testing.T) {
 		"INPUT_URI",
 		"LIVEKIT_OUTPUT_URI",
 		"LIVEKIT_OUTPUT_OPTIONS",
+		"RELAY_CODEC_ARGS",
+		"RECORDING_FANOUT_URI",
 		"RECORDING_OUTPUT_URI",
 		"LIVEKIT_TOKEN",
 	} {
@@ -194,9 +199,18 @@ func TestBuildStreamWorkload(t *testing.T) {
 	if service.Spec.Ports[1].NodePort != 30900 {
 		t.Fatalf("input node port = %d, want 30900", service.Spec.Ports[1].NodePort)
 	}
+	if value := envValue(container.Env, "RELAY_CODEC_ARGS"); value != "-c copy" {
+		t.Fatalf("relay codec args = %q, want -c copy", value)
+	}
+	if value := envValue(container.Env, "RECORDING_FANOUT_URI"); value != "udp://127.0.0.1:23000?pkt_size=1316" {
+		t.Fatalf("recording fanout uri = %q, want local UDP fanout", value)
+	}
+	if value := envValue(container.Env, "RECORDING_OUTPUT_URI"); value != "srt://:10000?mode=listener" {
+		t.Fatalf("recording output uri = %q, want recording listener output", value)
+	}
 }
 
-func TestBuildStreamWorkloadWithMockLiveKit(t *testing.T) {
+func TestBuildStreamWorkloadWithRTMPLiveKit(t *testing.T) {
 	stream := &domain.Stream{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "studio",
@@ -209,8 +223,9 @@ func TestBuildStreamWorkloadWithMockLiveKit(t *testing.T) {
 				URI:      "srt://:9000?mode=listener",
 			},
 			LiveKit: domain.LiveKitSpec{
-				Mock: true,
-				Room: "room-a",
+				URL:    "rtmp://livekit-ingress.recording-system.svc.cluster.local:1935/x/key",
+				Format: "flv",
+				Room:   "room-a",
 			},
 		},
 	}
@@ -219,13 +234,74 @@ func TestBuildStreamWorkloadWithMockLiveKit(t *testing.T) {
 	container := deployment.Spec.Template.Spec.Containers[0]
 
 	if hasEnv(container.Env, "LIVEKIT_TOKEN") {
-		t.Fatalf("relay env = %#v, want no LIVEKIT_TOKEN in mock mode", container.Env)
+		t.Fatalf("relay env = %#v, want no LIVEKIT_TOKEN when no token secret is set", container.Env)
 	}
-	if value := envValue(container.Env, "LIVEKIT_OUTPUT_URI"); value != "/dev/null" {
-		t.Fatalf("mock livekit output uri = %q, want /dev/null", value)
+	if value := envValue(container.Env, "LIVEKIT_OUTPUT_URI"); value != stream.Spec.LiveKit.URL {
+		t.Fatalf("livekit output uri = %q, want %q", value, stream.Spec.LiveKit.URL)
 	}
-	if value := envValue(container.Env, "LIVEKIT_OUTPUT_OPTIONS"); value != "[f=null]" {
-		t.Fatalf("mock livekit output options = %q, want [f=null]", value)
+	if value := envValue(container.Env, "LIVEKIT_OUTPUT_OPTIONS"); value != "[f=flv]" {
+		t.Fatalf("livekit output options = %q, want [f=flv]", value)
+	}
+}
+
+func TestBuildStreamWorkloadWithManagedLiveKitIngress(t *testing.T) {
+	stream := &domain.Stream{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "studio",
+			Namespace: "default",
+			UID:       types.UID("stream-uid"),
+		},
+		Spec: domain.StreamSpec{
+			Input: domain.StreamInputSpec{
+				Protocol: "srt",
+				URI:      "srt://:9000?mode=listener",
+			},
+			LiveKit: domain.LiveKitSpec{
+				Room: "room-a",
+			},
+		},
+		Status: domain.StreamStatus{
+			LiveKitIngressID:  "IN_test",
+			LiveKitSecretName: "stream-studio-livekit",
+		},
+	}
+
+	deployment := BuildStreamDeployment(stream, StreamWorkloadOptions{RelayImage: "relay:dev"})
+	container := deployment.Spec.Template.Spec.Containers[0]
+	env := envByName(container.Env, "LIVEKIT_OUTPUT_URI")
+
+	if deployment.Spec.Template.Annotations["recording.kinugasa.dev/livekit-ingress-id"] != "IN_test" {
+		t.Fatalf("livekit ingress annotation = %q, want IN_test", deployment.Spec.Template.Annotations["recording.kinugasa.dev/livekit-ingress-id"])
+	}
+	if env.Value != "" {
+		t.Fatalf("livekit output uri value = %q, want empty direct value", env.Value)
+	}
+	if env.ValueFrom == nil || env.ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("livekit output uri env = %#v, want secret key ref", env)
+	}
+	if env.ValueFrom.SecretKeyRef.Name != "stream-studio-livekit" {
+		t.Fatalf("livekit secret name = %q, want stream-studio-livekit", env.ValueFrom.SecretKeyRef.Name)
+	}
+	if env.ValueFrom.SecretKeyRef.Key != liveKitIngressURLKey {
+		t.Fatalf("livekit secret key = %q, want %q", env.ValueFrom.SecretKeyRef.Key, liveKitIngressURLKey)
+	}
+	if value := envValue(container.Env, "LIVEKIT_OUTPUT_OPTIONS"); value != "[f=whip]" {
+		t.Fatalf("livekit output options = %q, want [f=whip]", value)
+	}
+	if value := envValue(container.Env, "RELAY_CODEC_ARGS"); value != "-c:v copy -c:a libopus -ac 2 -b:a 128k" {
+		t.Fatalf("relay codec args = %q, want WHIP-compatible args", value)
+	}
+
+	secret := buildLiveKitSecret(stream, &LiveKitIngressInfo{
+		ID:        "IN_test",
+		URL:       "http://livekit-ingress.recording-system.svc.cluster.local:8080/whip/key",
+		StreamKey: "key",
+	})
+	if string(secret.Data[liveKitIngressURLKey]) != "http://livekit-ingress.recording-system.svc.cluster.local:8080/whip/key" {
+		t.Fatalf("secret url = %q, want livekit whip url", string(secret.Data[liveKitIngressURLKey]))
+	}
+	if string(secret.Data[liveKitStreamKeyKey]) != "key" {
+		t.Fatalf("secret stream key = %q, want key", string(secret.Data[liveKitStreamKeyKey]))
 	}
 }
 
@@ -258,4 +334,13 @@ func envValue(items []corev1.EnvVar, name string) string {
 		}
 	}
 	return ""
+}
+
+func envByName(items []corev1.EnvVar, name string) corev1.EnvVar {
+	for _, item := range items {
+		if item.Name == name {
+			return item
+		}
+	}
+	return corev1.EnvVar{}
 }

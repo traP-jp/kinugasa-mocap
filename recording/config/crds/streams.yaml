@@ -55,11 +55,15 @@ spec:
                   required:
                     - room
                   properties:
-                    mock:
-                      type: boolean
                     url:
                       type: string
                       minLength: 1
+                    format:
+                      type: string
+                      enum:
+                        - mpegts
+                        - flv
+                        - whip
                     room:
                       type: string
                       minLength: 1
@@ -111,6 +115,10 @@ spec:
                 serviceName:
                   type: string
                 recordingEndpoint:
+                  type: string
+                livekitIngressID:
+                  type: string
+                livekitSecretName:
                   type: string
                 livekitConnected:
                   type: boolean
