@@ -42,6 +42,9 @@ func TestCRD(t *testing.T) {
 		"kind: CustomResourceDefinition",
 		"name: recordings.recording.kinugasa.dev",
 		"kind: Recording",
+		"name: streams.recording.kinugasa.dev",
+		"kind: Stream",
+		"objectKey",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("CRD body does not contain %q:\n%s", want, body)
@@ -50,5 +53,5 @@ func TestCRD(t *testing.T) {
 }
 
 func newTestServer() *APIServer {
-	return NewAPIServer(":0", service.NewCRDService(config.RecordingCRDManifest()))
+	return NewAPIServer(":0", service.NewCRDService(config.CRDManifest()))
 }

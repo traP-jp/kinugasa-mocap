@@ -25,11 +25,18 @@
         runtimeInputs = with pkgs; [ k3d ];
         text = ''
           CLUSTER=''${CLUSTER:-kinugasa-mocap}
+          SRT_HOST_PORT=''${SRT_HOST_PORT:-9000}
+          RIST_HOST_PORT=''${RIST_HOST_PORT:-9001}
+          SRT_NODE_PORT=''${SRT_NODE_PORT:-30900}
+          RIST_NODE_PORT=''${RIST_NODE_PORT:-30901}
 
           if k3d cluster list "$CLUSTER" >/dev/null 2>&1; then
             echo "k3d cluster $CLUSTER already exists"
+            echo "test UDP port mappings are only added when the cluster is created; run recording:down and recording:up if they are missing"
           else
-            k3d cluster create "$CLUSTER"
+            k3d cluster create "$CLUSTER" \
+              --port "$SRT_HOST_PORT:$SRT_NODE_PORT/udp@server:0" \
+              --port "$RIST_HOST_PORT:$RIST_NODE_PORT/udp@server:0"
           fi
         '';
       };
@@ -55,8 +62,9 @@
           GIT_ROOT=$(git rev-parse --show-toplevel)
           IMAGE=''${IMAGE:-recording-server:dev}
 
-          kubectl apply -f "$GIT_ROOT/recording/config/crd.yaml"
+          kubectl apply -f "$GIT_ROOT/recording/config/crds"
           kubectl wait --for condition=Established crd/recordings.recording.kinugasa.dev --timeout=60s
+          kubectl wait --for condition=Established crd/streams.recording.kinugasa.dev --timeout=60s
           kubectl apply -f "$GIT_ROOT/recording/config/server.yaml"
           kubectl set image deployment/recording-server "server=$IMAGE" -n recording-system
           kubectl rollout status deployment/recording-server -n recording-system --timeout=120s
@@ -119,6 +127,60 @@
         '';
       };
 
+      packages."recording:send-srt" = pkgs.writeShellApplication {
+        name = "recording-send-srt";
+        runtimeInputs = with pkgs; [ ffmpeg ];
+        text = ''
+          SRT_HOST=''${SRT_HOST:-127.0.0.1}
+          SRT_HOST_PORT=''${SRT_HOST_PORT:-9000}
+          SRT_URI=''${SRT_URI:-srt://$SRT_HOST:$SRT_HOST_PORT?mode=caller&latency=200000}
+          VIDEO_SIZE=''${VIDEO_SIZE:-1280x720}
+          VIDEO_RATE=''${VIDEO_RATE:-30}
+          AUDIO_FREQUENCY=''${AUDIO_FREQUENCY:-1000}
+
+          duration_args=()
+          if [ -n "''${DURATION:-}" ]; then
+            duration_args=(-t "$DURATION")
+          fi
+
+          ffmpeg -hide_banner -loglevel info -re \
+            -f lavfi -i "testsrc2=size=$VIDEO_SIZE:rate=$VIDEO_RATE" \
+            -f lavfi -i "sine=frequency=$AUDIO_FREQUENCY:sample_rate=48000" \
+            "''${duration_args[@]}" \
+            -map 0:v:0 -map 1:a:0 \
+            -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p -g "$((VIDEO_RATE * 2))" \
+            -c:a aac -b:a 128k \
+            -f mpegts "$SRT_URI"
+        '';
+      };
+
+      packages."recording:send-rist" = pkgs.writeShellApplication {
+        name = "recording-send-rist";
+        runtimeInputs = with pkgs; [ ffmpeg ];
+        text = ''
+          RIST_HOST=''${RIST_HOST:-127.0.0.1}
+          RIST_HOST_PORT=''${RIST_HOST_PORT:-9001}
+          RIST_URI=''${RIST_URI:-rist://$RIST_HOST:$RIST_HOST_PORT}
+          VIDEO_SIZE=''${VIDEO_SIZE:-1280x720}
+          VIDEO_RATE=''${VIDEO_RATE:-30}
+          AUDIO_FREQUENCY=''${AUDIO_FREQUENCY:-1000}
+
+          duration_args=()
+          if [ -n "''${DURATION:-}" ]; then
+            duration_args=(-t "$DURATION")
+          fi
+
+          ffmpeg -hide_banner -loglevel info -re \
+            -f lavfi -i "testsrc2=size=$VIDEO_SIZE:rate=$VIDEO_RATE" \
+            -f lavfi -i "sine=frequency=$AUDIO_FREQUENCY:sample_rate=48000" \
+            "''${duration_args[@]}" \
+            -map 0:v:0 -map 1:a:0 \
+            -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p -g "$((VIDEO_RATE * 2))" \
+            -c:a aac -b:a 128k \
+            -f mpegts "$RIST_URI"
+        '';
+      };
+
       packages."recording:down" = pkgs.writeShellApplication {
         name = "recording-down";
         runtimeInputs = with pkgs; [ k3d ];
@@ -168,6 +230,14 @@
       apps."recording:logs" = {
         type = "app";
         program = "${config.packages."recording:logs"}/bin/recording-logs";
+      };
+      apps."recording:send-srt" = {
+        type = "app";
+        program = "${config.packages."recording:send-srt"}/bin/recording-send-srt";
+      };
+      apps."recording:send-rist" = {
+        type = "app";
+        program = "${config.packages."recording:send-rist"}/bin/recording-send-rist";
       };
       apps."recording:down" = {
         type = "app";

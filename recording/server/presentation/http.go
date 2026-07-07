@@ -22,6 +22,10 @@ func NewAPIServer(addr string, service *service.CRDService) *APIServer {
 	}
 }
 
+func (s *APIServer) Addr() string {
+	return s.addr
+}
+
 func (s *APIServer) Start(ctx context.Context) error {
 	e := s.Router()
 	errCh := make(chan error, 1)

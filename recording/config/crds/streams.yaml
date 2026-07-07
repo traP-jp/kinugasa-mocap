@@ -1,0 +1,157 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: streams.recording.kinugasa.dev
+spec:
+  group: recording.kinugasa.dev
+  names:
+    kind: Stream
+    listKind: StreamList
+    plural: streams
+    singular: stream
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - input
+                - livekit
+              properties:
+                input:
+                  type: object
+                  required:
+                    - protocol
+                    - uri
+                  properties:
+                    protocol:
+                      type: string
+                      enum:
+                        - srt
+                        - rist
+                    uri:
+                      type: string
+                      minLength: 1
+                    port:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 65535
+                    nodePort:
+                      type: integer
+                      format: int32
+                      minimum: 30000
+                      maximum: 32767
+                livekit:
+                  type: object
+                  required:
+                    - room
+                  properties:
+                    mock:
+                      type: boolean
+                    url:
+                      type: string
+                      minLength: 1
+                    room:
+                      type: string
+                      minLength: 1
+                    tokenSecretRef:
+                      type: object
+                      required:
+                        - name
+                        - key
+                      properties:
+                        name:
+                          type: string
+                        key:
+                          type: string
+                    participantIdentity:
+                      type: string
+                    participantName:
+                      type: string
+                recording:
+                  type: object
+                  properties:
+                    protocol:
+                      type: string
+                      enum:
+                        - srt
+                        - rist
+                    endpoint:
+                      type: string
+                      minLength: 1
+                    port:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 65535
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                phase:
+                  type: string
+                  enum:
+                    - Pending
+                    - Running
+                    - Degraded
+                    - Failed
+                podName:
+                  type: string
+                serviceName:
+                  type: string
+                recordingEndpoint:
+                  type: string
+                livekitConnected:
+                  type: boolean
+                error:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                      - lastTransitionTime
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Input
+          type: string
+          jsonPath: .spec.input.protocol
+        - name: LiveKit Room
+          type: string
+          jsonPath: .spec.livekit.room
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

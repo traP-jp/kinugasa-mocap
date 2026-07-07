@@ -1,0 +1,149 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: recordings.recording.kinugasa.dev
+spec:
+  group: recording.kinugasa.dev
+  names:
+    kind: Recording
+    listKind: RecordingList
+    plural: recordings
+    singular: recording
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - streamRef
+                - output
+              properties:
+                streamRef:
+                  type: object
+                  required:
+                    - name
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                output:
+                  type: object
+                  required:
+                    - s3
+                  properties:
+                    s3:
+                      type: object
+                      required:
+                        - bucket
+                        - objectKey
+                      properties:
+                        bucket:
+                          type: string
+                        objectKey:
+                          type: string
+                          minLength: 1
+                        endpoint:
+                          type: string
+                        region:
+                          type: string
+                        secretRef:
+                          type: object
+                          required:
+                            - name
+                          properties:
+                            name:
+                              type: string
+                            accessKeyIDKey:
+                              type: string
+                            secretAccessKeyKey:
+                              type: string
+                            sessionTokenKey:
+                              type: string
+                stopRequestedAt:
+                  type: string
+                  format: date-time
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                phase:
+                  type: string
+                  enum:
+                    - Pending
+                    - Recording
+                    - StopRequested
+                    - Uploading
+                    - Completed
+                    - Failed
+                jobName:
+                  type: string
+                startedAt:
+                  type: string
+                  format: date-time
+                stoppedAt:
+                  type: string
+                  format: date-time
+                completedAt:
+                  type: string
+                  format: date-time
+                s3:
+                  type: object
+                  properties:
+                    bucket:
+                      type: string
+                    objectKey:
+                      type: string
+                    uri:
+                      type: string
+                error:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                      - lastTransitionTime
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Stream
+          type: string
+          jsonPath: .spec.streamRef.name
+        - name: S3 Object
+          type: string
+          jsonPath: .spec.output.s3.objectKey
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

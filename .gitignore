@@ -1,5 +1,6 @@
 .codex
 result
+result-*
 target
 node_modules
 treefmt.toml

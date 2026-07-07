@@ -8,4 +8,9 @@ const (
 	RecordingListKind = "RecordingList"
 	RecordingPlural   = "recordings"
 	RecordingSingular = "recording"
+
+	StreamKind     = "Stream"
+	StreamListKind = "StreamList"
+	StreamPlural   = "streams"
+	StreamSingular = "stream"
 )

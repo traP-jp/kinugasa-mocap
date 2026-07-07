@@ -5,13 +5,13 @@ Minimal Go application for the recording server.
 ## Structure
 
 ```text
-domain/             Recording CRD domain metadata
+domain/             Recording and Stream CRD domain metadata
 service/            application use cases
 presentation/       Echo HTTP API
 main.go             wiring and startup
 ```
 
-The CRD manifest is embedded by the sibling `recording/config` Go module and
+The CRD manifests are embedded by the sibling `recording/config` Go module and
 wired through the repository root `go.work`.
 
 ## Local Run
@@ -25,10 +25,42 @@ The server exposes:
 - `GET /healthz`
 - `GET /crd`
 
-The bundled empty Kubernetes CRD can also be printed directly:
+The bundled Kubernetes CRDs can also be printed directly:
 
 ```sh
 go run . --print-crd
+```
+
+The bundle currently contains:
+
+- `Stream`: receives an RIST/SRT input, relays it to LiveKit continuously, and exposes a recording endpoint for one-shot recorder Pods.
+- `Recording`: represents one recording request. The server usecase sets the S3 object key, and the operator reconciles it into a non-restarting Job.
+
+## Operator Mode
+
+```sh
+go run . --enable-operator
+```
+
+Operator mode starts the HTTP API and reconciles:
+
+- `Stream` into a single-replica relay Deployment and UDP Service. The relay container runs FFmpeg and forwards to the configured LiveKit output URL, or to a local null sink when `spec.livekit.mock` is true.
+- `Recording` into a Job with `restartPolicy: Never` and `backoffLimit: 0`. The Pod has a recorder container and an uploader container. The recorder runs FFmpeg into a shared `emptyDir`; the uploader runs rclone and uploads that file to the server-selected S3 object key from `spec.output.s3.objectKey`.
+
+Stop requests are written to `Recording.spec.stopRequestedAt`. The operator patches the active recorder Pod annotation and exposes it through a Downward API file at `/var/run/kinugasa/recording-control/stop-requested-at`, so the recorder can finalize and upload before exiting.
+
+The relay image must provide `/bin/sh` and `ffmpeg`. The recorder image must
+provide `/bin/sh` and `ffmpeg`. The uploader image must provide `/bin/sh` and
+`rclone`. Missing binaries or unsupported protocols are treated as runtime
+errors; the operator does not fall back to a custom uploader.
+
+Images can be set with:
+
+```sh
+go run . --enable-operator \
+  --stream-relay-image=linuxserver/ffmpeg:latest \
+  --recording-recorder-image=linuxserver/ffmpeg:latest \
+  --recording-uploader-image=rclone/rclone:latest
 ```
 
 ## Cluster Run

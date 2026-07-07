@@ -3,6 +3,98 @@ kind: Namespace
 metadata:
   name: recording-system
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: recording-server
+  namespace: recording-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: recording-server
+rules:
+  - apiGroups:
+      - recording.kinugasa.dev
+    resources:
+      - streams
+      - recordings
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - recording.kinugasa.dev
+    resources:
+      - streams/status
+      - recordings/status
+    verbs:
+      - get
+      - update
+      - patch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: recording-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: recording-server
+subjects:
+  - kind: ServiceAccount
+    name: recording-server
+    namespace: recording-system
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,12 +110,14 @@ spec:
       labels:
         app.kubernetes.io/name: recording-server
     spec:
+      serviceAccountName: recording-server
       containers:
         - name: server
           image: recording-server:dev
           imagePullPolicy: IfNotPresent
           args:
             - --listen=:8080
+            - --enable-operator
           ports:
             - name: http
               containerPort: 8080
