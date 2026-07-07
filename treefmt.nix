@@ -18,6 +18,7 @@
           enable = true;
           formatCommand = "format";
         };
+        programs.gofmt.enable = true;
         programs.nixfmt.enable = true;
         programs.rustfmt = {
           enable = true;

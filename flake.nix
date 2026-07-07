@@ -44,6 +44,9 @@
 
             packages = with pkgs; [
               cargo-hakari
+              k3d
+              kubectl
+              go
               nodejs
               pnpm
               treefmt
