@@ -30,6 +30,7 @@
       imports = [
         ./treefmt.nix
         ./rust-toolchain.nix
+        ./recording
       ];
 
       perSystem =

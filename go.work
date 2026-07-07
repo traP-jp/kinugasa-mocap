@@ -1,0 +1,8 @@
+go 1.26
+
+use (
+	./recording/config
+	./recording/server
+)
+
+replace github.com/comavius/kinugasa-mocap/recording/config v0.0.0 => ./recording/config
