@@ -18,7 +18,7 @@ func CRDManifest() []byte {
 	return manifest
 }
 
-func RecordingCRDManifest() []byte {
+func TakeCRDManifest() []byte {
 	return CRDManifest()
 }
 

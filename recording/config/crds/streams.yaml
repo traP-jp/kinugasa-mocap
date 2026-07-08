@@ -81,7 +81,7 @@ spec:
                       type: string
                     participantName:
                       type: string
-                recording:
+                take:
                   type: object
                   properties:
                     protocol:
@@ -114,7 +114,7 @@ spec:
                   type: string
                 serviceName:
                   type: string
-                recordingEndpoint:
+                takeEndpoint:
                   type: string
                 livekitIngressID:
                   type: string

@@ -20,9 +20,9 @@ type Stream struct {
 }
 
 type StreamSpec struct {
-	Input     StreamInputSpec     `json:"input"`
-	LiveKit   LiveKitSpec         `json:"livekit"`
-	Recording StreamRecordingSpec `json:"recording,omitempty"`
+	Input   StreamInputSpec `json:"input"`
+	LiveKit LiveKitSpec     `json:"livekit"`
+	Take    StreamTakeSpec  `json:"take,omitempty"`
 }
 
 type StreamInputSpec struct {
@@ -46,7 +46,7 @@ type SecretKeyReference struct {
 	Key  string `json:"key,omitempty"`
 }
 
-type StreamRecordingSpec struct {
+type StreamTakeSpec struct {
 	Protocol string `json:"protocol,omitempty"`
 	Endpoint string `json:"endpoint,omitempty"`
 	Port     int32  `json:"port,omitempty"`
@@ -57,7 +57,7 @@ type StreamStatus struct {
 	Phase              string      `json:"phase,omitempty"`
 	PodName            string      `json:"podName,omitempty"`
 	ServiceName        string      `json:"serviceName,omitempty"`
-	RecordingEndpoint  string      `json:"recordingEndpoint,omitempty"`
+	TakeEndpoint       string      `json:"takeEndpoint,omitempty"`
 	LiveKitIngressID   string      `json:"livekitIngressID,omitempty"`
 	LiveKitSecretName  string      `json:"livekitSecretName,omitempty"`
 	LiveKitConnected   bool        `json:"livekitConnected,omitempty"`
@@ -72,17 +72,17 @@ type StreamList struct {
 	Items []Stream `json:"items"`
 }
 
-type Recording struct {
+type Take struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   RecordingSpec   `json:"spec,omitempty"`
-	Status RecordingStatus `json:"status,omitempty"`
+	Spec   TakeSpec   `json:"spec,omitempty"`
+	Status TakeStatus `json:"status,omitempty"`
 }
 
-type RecordingSpec struct {
+type TakeSpec struct {
 	StreamRef       LocalObjectReference `json:"streamRef"`
-	Output          RecordingOutputSpec  `json:"output"`
+	Output          TakeOutputSpec       `json:"output"`
 	StopRequestedAt *metav1.Time         `json:"stopRequestedAt,omitempty"`
 }
 
@@ -91,7 +91,7 @@ type LocalObjectReference struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-type RecordingOutputSpec struct {
+type TakeOutputSpec struct {
 	S3 S3OutputSpec `json:"s3"`
 }
 
@@ -110,29 +110,29 @@ type S3SecretReference struct {
 	SessionTokenKey    string `json:"sessionTokenKey,omitempty"`
 }
 
-type RecordingStatus struct {
-	ObservedGeneration int64             `json:"observedGeneration,omitempty"`
-	Phase              string            `json:"phase,omitempty"`
-	JobName            string            `json:"jobName,omitempty"`
-	StartedAt          *metav1.Time      `json:"startedAt,omitempty"`
-	StoppedAt          *metav1.Time      `json:"stoppedAt,omitempty"`
-	CompletedAt        *metav1.Time      `json:"completedAt,omitempty"`
-	S3                 RecordingS3Status `json:"s3,omitempty"`
-	Error              string            `json:"error,omitempty"`
-	Conditions         []Condition       `json:"conditions,omitempty"`
+type TakeStatus struct {
+	ObservedGeneration int64        `json:"observedGeneration,omitempty"`
+	Phase              string       `json:"phase,omitempty"`
+	JobName            string       `json:"jobName,omitempty"`
+	StartedAt          *metav1.Time `json:"startedAt,omitempty"`
+	StoppedAt          *metav1.Time `json:"stoppedAt,omitempty"`
+	CompletedAt        *metav1.Time `json:"completedAt,omitempty"`
+	S3                 TakeS3Status `json:"s3,omitempty"`
+	Error              string       `json:"error,omitempty"`
+	Conditions         []Condition  `json:"conditions,omitempty"`
 }
 
-type RecordingS3Status struct {
+type TakeS3Status struct {
 	Bucket    string `json:"bucket,omitempty"`
 	ObjectKey string `json:"objectKey,omitempty"`
 	URI       string `json:"uri,omitempty"`
 }
 
-type RecordingList struct {
+type TakeList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []Recording `json:"items"`
+	Items []Take `json:"items"`
 }
 
 type Condition struct {
@@ -166,8 +166,8 @@ func (in *StreamList) DeepCopyObject() runtime.Object {
 	return out
 }
 
-func (in *Recording) DeepCopyObject() runtime.Object {
-	out := new(Recording)
+func (in *Take) DeepCopyObject() runtime.Object {
+	out := new(Take)
 	*out = *in
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	if in.Spec.StopRequestedAt != nil {
@@ -190,13 +190,13 @@ func (in *Recording) DeepCopyObject() runtime.Object {
 	return out
 }
 
-func (in *RecordingList) DeepCopyObject() runtime.Object {
-	out := new(RecordingList)
+func (in *TakeList) DeepCopyObject() runtime.Object {
+	out := new(TakeList)
 	*out = *in
 	in.ListMeta.DeepCopyInto(&out.ListMeta)
-	out.Items = make([]Recording, len(in.Items))
+	out.Items = make([]Take, len(in.Items))
 	for i := range in.Items {
-		out.Items[i] = *in.Items[i].DeepCopyObject().(*Recording)
+		out.Items[i] = *in.Items[i].DeepCopyObject().(*Take)
 	}
 	return out
 }

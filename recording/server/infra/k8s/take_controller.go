@@ -16,25 +16,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-type RecordingReconciler struct {
+type TakeReconciler struct {
 	client.Client
 	Scheme  *runtime.Scheme
-	Options RecordingJobOptions
+	Options TakeJobOptions
 }
 
-func (r *RecordingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var recording domain.Recording
-	if err := r.Get(ctx, req.NamespacedName, &recording); err != nil {
+func (r *TakeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	var take domain.Take
+	if err := r.Get(ctx, req.NamespacedName, &take); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
 
-	stream, err := r.getStream(ctx, &recording)
+	stream, err := r.getStream(ctx, &take)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, r.updateStatus(ctx, &recording, recordingStatusInput{
+			return ctrl.Result{}, r.updateStatus(ctx, &take, takeStatusInput{
 				Phase: "Failed",
 				Error: "referenced stream was not found",
 			})
@@ -42,19 +42,19 @@ func (r *RecordingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	jobName := recordingJobName(&recording)
+	jobName := takeJobName(&take)
 	var job batchv1.Job
-	err = r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: recording.Namespace}, &job)
+	err = r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: take.Namespace}, &job)
 	if apierrors.IsNotFound(err) {
-		job := BuildRecordingJob(&recording, stream, r.Options)
-		if err := controllerutil.SetControllerReference(&recording, job, r.Scheme); err != nil {
+		job := BuildTakeJob(&take, stream, r.Options)
+		if err := controllerutil.SetControllerReference(&take, job, r.Scheme); err != nil {
 			return ctrl.Result{}, err
 		}
 		if err := r.Create(ctx, job); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, r.updateStatus(ctx, &recording, recordingStatusInput{
-			Phase:   "Recording",
+		return ctrl.Result{}, r.updateStatus(ctx, &take, takeStatusInput{
+			Phase:   "Capturing",
 			JobName: jobName,
 		})
 	}
@@ -62,34 +62,34 @@ func (r *RecordingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileStopRequest(ctx, &recording); err != nil {
+	if err := r.reconcileStopRequest(ctx, &take); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, r.updateStatusFromJob(ctx, &recording, &job)
+	return ctrl.Result{}, r.updateStatusFromJob(ctx, &take, &job)
 }
 
-func (r *RecordingReconciler) getStream(ctx context.Context, recording *domain.Recording) (*domain.Stream, error) {
-	namespace := recording.Spec.StreamRef.Namespace
+func (r *TakeReconciler) getStream(ctx context.Context, take *domain.Take) (*domain.Stream, error) {
+	namespace := take.Spec.StreamRef.Namespace
 	if namespace == "" {
-		namespace = recording.Namespace
+		namespace = take.Namespace
 	}
 	var stream domain.Stream
-	if err := r.Get(ctx, types.NamespacedName{Name: recording.Spec.StreamRef.Name, Namespace: namespace}, &stream); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: take.Spec.StreamRef.Name, Namespace: namespace}, &stream); err != nil {
 		return nil, err
 	}
 	return &stream, nil
 }
 
-func (r *RecordingReconciler) reconcileStopRequest(ctx context.Context, recording *domain.Recording) error {
-	if recording.Spec.StopRequestedAt == nil {
+func (r *TakeReconciler) reconcileStopRequest(ctx context.Context, take *domain.Take) error {
+	if take.Spec.StopRequestedAt == nil {
 		return nil
 	}
 
 	var pods corev1.PodList
-	if err := r.List(ctx, &pods, client.InNamespace(recording.Namespace), client.MatchingLabels(recordingLabels(recording))); err != nil {
+	if err := r.List(ctx, &pods, client.InNamespace(take.Namespace), client.MatchingLabels(takeLabels(take))); err != nil {
 		return err
 	}
-	value := recording.Spec.StopRequestedAt.Format("2006-01-02T15:04:05Z07:00")
+	value := take.Spec.StopRequestedAt.Format("2006-01-02T15:04:05Z07:00")
 	for i := range pods.Items {
 		pod := &pods.Items[i]
 		if pod.Annotations[stopRequestedAtAnnotation] == value {
@@ -107,17 +107,17 @@ func (r *RecordingReconciler) reconcileStopRequest(ctx context.Context, recordin
 	return nil
 }
 
-func (r *RecordingReconciler) updateStatusFromJob(ctx context.Context, recording *domain.Recording, job *batchv1.Job) error {
-	input := recordingStatusInput{
-		Phase:   "Recording",
+func (r *TakeReconciler) updateStatusFromJob(ctx context.Context, take *domain.Take, job *batchv1.Job) error {
+	input := takeStatusInput{
+		Phase:   "Capturing",
 		JobName: job.Name,
 	}
 	if job.Status.StartTime != nil {
 		input.StartedAt = job.Status.StartTime
 	}
-	if recording.Spec.StopRequestedAt != nil {
+	if take.Spec.StopRequestedAt != nil {
 		input.Phase = "StopRequested"
-		input.StoppedAt = recording.Spec.StopRequestedAt
+		input.StoppedAt = take.Spec.StopRequestedAt
 	}
 
 	for _, condition := range job.Status.Conditions {
@@ -140,10 +140,10 @@ func (r *RecordingReconciler) updateStatusFromJob(ctx context.Context, recording
 		}
 	}
 
-	return r.updateStatus(ctx, recording, input)
+	return r.updateStatus(ctx, take, input)
 }
 
-type recordingStatusInput struct {
+type takeStatusInput struct {
 	Phase       string
 	JobName     string
 	StartedAt   *metav1.Time
@@ -152,38 +152,38 @@ type recordingStatusInput struct {
 	Error       string
 }
 
-func (r *RecordingReconciler) updateStatus(ctx context.Context, recording *domain.Recording, input recordingStatusInput) error {
-	next := recording.DeepCopyObject().(*domain.Recording)
-	next.Status.ObservedGeneration = recording.Generation
+func (r *TakeReconciler) updateStatus(ctx context.Context, take *domain.Take, input takeStatusInput) error {
+	next := take.DeepCopyObject().(*domain.Take)
+	next.Status.ObservedGeneration = take.Generation
 	next.Status.Phase = input.Phase
 	next.Status.JobName = input.JobName
 	next.Status.StartedAt = input.StartedAt
 	next.Status.StoppedAt = input.StoppedAt
 	next.Status.CompletedAt = input.CompletedAt
 	next.Status.Error = input.Error
-	next.Status.S3.Bucket = recording.Spec.Output.S3.Bucket
-	next.Status.S3.ObjectKey = recording.Spec.Output.S3.ObjectKey
-	if recording.Spec.Output.S3.Bucket != "" && recording.Spec.Output.S3.ObjectKey != "" {
-		next.Status.S3.URI = "s3://" + recording.Spec.Output.S3.Bucket + "/" + recording.Spec.Output.S3.ObjectKey
+	next.Status.S3.Bucket = take.Spec.Output.S3.Bucket
+	next.Status.S3.ObjectKey = take.Spec.Output.S3.ObjectKey
+	if take.Spec.Output.S3.Bucket != "" && take.Spec.Output.S3.ObjectKey != "" {
+		next.Status.S3.URI = "s3://" + take.Spec.Output.S3.Bucket + "/" + take.Spec.Output.S3.ObjectKey
 	}
 	if input.StartedAt == nil {
-		next.Status.StartedAt = recording.Status.StartedAt
+		next.Status.StartedAt = take.Status.StartedAt
 	}
 	if input.StoppedAt == nil {
-		next.Status.StoppedAt = recording.Status.StoppedAt
+		next.Status.StoppedAt = take.Status.StoppedAt
 	}
 	if input.CompletedAt == nil {
-		next.Status.CompletedAt = recording.Status.CompletedAt
+		next.Status.CompletedAt = take.Status.CompletedAt
 	}
-	if equality.Semantic.DeepEqual(recording.Status, next.Status) {
+	if equality.Semantic.DeepEqual(take.Status, next.Status) {
 		return nil
 	}
 	return r.Status().Update(ctx, next)
 }
 
-func (r *RecordingReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *TakeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&domain.Recording{}).
+		For(&domain.Take{}).
 		Owns(&batchv1.Job{}).
 		Complete(r)
 }

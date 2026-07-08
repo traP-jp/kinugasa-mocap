@@ -10,19 +10,19 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func TestBuildRecordingJob(t *testing.T) {
-	recording := &domain.Recording{
+func TestBuildTakeJob(t *testing.T) {
+	take := &domain.Take{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "session-1",
+			Name:      "take-1",
 			Namespace: "default",
-			UID:       types.UID("recording-uid"),
+			UID:       types.UID("take-uid"),
 		},
-		Spec: domain.RecordingSpec{
+		Spec: domain.TakeSpec{
 			StreamRef: domain.LocalObjectReference{Name: "studio"},
-			Output: domain.RecordingOutputSpec{
+			Output: domain.TakeOutputSpec{
 				S3: domain.S3OutputSpec{
 					Bucket:    "mocap-recordings",
-					ObjectKey: "recordings/session-1.mp4",
+					ObjectKey: "takes/take-1.mp4",
 					SecretRef: &domain.S3SecretReference{
 						Name: "s3-credentials",
 					},
@@ -36,17 +36,17 @@ func TestBuildRecordingJob(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: domain.StreamSpec{
-			Recording: domain.StreamRecordingSpec{Protocol: "srt", Port: 10000},
+			Take: domain.StreamTakeSpec{Protocol: "srt", Port: 10000},
 		},
 	}
 
-	job := BuildRecordingJob(recording, stream, RecordingJobOptions{
+	job := BuildTakeJob(take, stream, TakeJobOptions{
 		RecorderImage: "recorder:dev",
 		UploaderImage: "rclone:dev",
 	})
 
-	if job.Name != "recording-session-1" {
-		t.Fatalf("job name = %q, want recording-session-1", job.Name)
+	if job.Name != "take-take-1" {
+		t.Fatalf("job name = %q, want take-take-1", job.Name)
 	}
 	if job.Spec.BackoffLimit == nil || *job.Spec.BackoffLimit != 0 {
 		t.Fatalf("backoff limit = %v, want 0", job.Spec.BackoffLimit)
@@ -76,7 +76,7 @@ func TestBuildRecordingJob(t *testing.T) {
 	for _, want := range []string{
 		"ffmpeg -hide_banner -loglevel info",
 		"-i \"${STREAM_URL}\"",
-		"output=\"/recording/data/recording.mp4\"",
+		"output=\"/take/data/take.mp4\"",
 		"printf '%s\\n' \"${ffmpeg_pid}\" > \"${pid_file}\"",
 		"touch \"${complete}\"",
 		"kill -TERM \"${ffmpeg_pid}\"",
@@ -146,7 +146,7 @@ func TestBuildStreamWorkload(t *testing.T) {
 				Room:           "room-a",
 				TokenSecretRef: &domain.SecretKeyReference{Name: "livekit-token", Key: "token"},
 			},
-			Recording: domain.StreamRecordingSpec{
+			Take: domain.StreamTakeSpec{
 				Protocol: "srt",
 				Port:     10000,
 			},
@@ -167,8 +167,8 @@ func TestBuildStreamWorkload(t *testing.T) {
 		"ffmpeg -hide_banner -loglevel info",
 		"-i \"${INPUT_URI}\"",
 		"auth_headers=\"-headers Authorization: Bearer ${LIVEKIT_TOKEN}\"",
-		"recording_fanout &",
-		"[f=mpegts:onfail=ignore]${RECORDING_FANOUT_URI}",
+		"take_fanout &",
+		"[f=mpegts:onfail=ignore]${TAKE_FANOUT_URI}",
 	} {
 		if !containsSubstring(container.Args[0], want) {
 			t.Fatalf("relay script = %q, want substring %q", container.Args[0], want)
@@ -179,8 +179,8 @@ func TestBuildStreamWorkload(t *testing.T) {
 		"LIVEKIT_OUTPUT_URI",
 		"LIVEKIT_OUTPUT_OPTIONS",
 		"RELAY_CODEC_ARGS",
-		"RECORDING_FANOUT_URI",
-		"RECORDING_OUTPUT_URI",
+		"TAKE_FANOUT_URI",
+		"TAKE_OUTPUT_URI",
 		"LIVEKIT_TOKEN",
 	} {
 		if !hasEnv(container.Env, want) {
@@ -188,7 +188,7 @@ func TestBuildStreamWorkload(t *testing.T) {
 		}
 	}
 	if service.Spec.Ports[0].Protocol != corev1.ProtocolUDP {
-		t.Fatalf("recording service protocol = %q, want UDP", service.Spec.Ports[0].Protocol)
+		t.Fatalf("take service protocol = %q, want UDP", service.Spec.Ports[0].Protocol)
 	}
 	if service.Spec.Type != corev1.ServiceTypeNodePort {
 		t.Fatalf("stream service type = %q, want NodePort", service.Spec.Type)
@@ -202,11 +202,11 @@ func TestBuildStreamWorkload(t *testing.T) {
 	if value := envValue(container.Env, "RELAY_CODEC_ARGS"); value != "-c copy" {
 		t.Fatalf("relay codec args = %q, want -c copy", value)
 	}
-	if value := envValue(container.Env, "RECORDING_FANOUT_URI"); value != "udp://127.0.0.1:23000?pkt_size=1316" {
-		t.Fatalf("recording fanout uri = %q, want local UDP fanout", value)
+	if value := envValue(container.Env, "TAKE_FANOUT_URI"); value != "udp://127.0.0.1:23000?pkt_size=1316" {
+		t.Fatalf("take fanout uri = %q, want local UDP fanout", value)
 	}
-	if value := envValue(container.Env, "RECORDING_OUTPUT_URI"); value != "srt://:10000?mode=listener" {
-		t.Fatalf("recording output uri = %q, want recording listener output", value)
+	if value := envValue(container.Env, "TAKE_OUTPUT_URI"); value != "srt://:10000?mode=listener" {
+		t.Fatalf("take output uri = %q, want take listener output", value)
 	}
 }
 

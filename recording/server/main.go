@@ -21,11 +21,11 @@ import (
 
 func main() {
 	addr := flag.String("listen", ":8080", "address to listen on")
-	printCRD := flag.Bool("print-crd", false, "print the bundled Recording CRDs and exit")
-	enableOperator := flag.Bool("enable-operator", false, "run Kubernetes controllers for Stream and Recording resources")
+	printCRD := flag.Bool("print-crd", false, "print the bundled Take CRDs and exit")
+	enableOperator := flag.Bool("enable-operator", false, "run Kubernetes controllers for Stream and Take resources")
 	relayImage := flag.String("stream-relay-image", "linuxserver/ffmpeg:latest", "image used for Stream relay pods; must provide /bin/sh and ffmpeg")
-	recorderImage := flag.String("recording-recorder-image", "linuxserver/ffmpeg:latest", "image used for one-shot Recording recorder containers; must provide /bin/sh and ffmpeg")
-	uploaderImage := flag.String("recording-uploader-image", "rclone/rclone:latest", "image used for one-shot Recording uploader containers; must provide /bin/sh and rclone")
+	recorderImage := flag.String("recording-recorder-image", "linuxserver/ffmpeg:latest", "image used for one-shot Take recorder containers; must provide /bin/sh and ffmpeg")
+	uploaderImage := flag.String("recording-uploader-image", "rclone/rclone:latest", "image used for one-shot Take uploader containers; must provide /bin/sh and rclone")
 	liveKitURL := flag.String("livekit-url", "http://livekit-server.recording-system.svc.cluster.local:7880", "LiveKit server URL used by the operator")
 	liveKitAPIKey := flag.String("livekit-api-key", "devkey", "LiveKit API key used by the operator")
 	liveKitAPISecret := flag.String("livekit-api-secret", "secret", "LiveKit API secret used by the operator")
@@ -113,10 +113,10 @@ func runOperator(ctx context.Context, apiServer *presentation.APIServer, options
 	}).SetupWithManager(mgr); err != nil {
 		return err
 	}
-	if err := (&k8s.RecordingReconciler{
+	if err := (&k8s.TakeReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Options: k8s.RecordingJobOptions{
+		Options: k8s.TakeJobOptions{
 			RecorderImage: options.RecorderImage,
 			UploaderImage: options.UploaderImage,
 		},

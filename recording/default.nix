@@ -69,7 +69,7 @@
           IMAGE=''${IMAGE:-recording-server:dev}
 
           kubectl apply -f "$GIT_ROOT/recording/config/crds"
-          kubectl wait --for condition=Established crd/recordings.recording.kinugasa.dev --timeout=60s
+          kubectl wait --for condition=Established crd/takes.recording.kinugasa.dev --timeout=60s
           kubectl wait --for condition=Established crd/streams.recording.kinugasa.dev --timeout=60s
           kubectl apply -f "$GIT_ROOT/recording/config/livekit.yaml"
           kubectl rollout status deployment/livekit-redis -n recording-system --timeout=120s

@@ -4,10 +4,10 @@ const (
 	APIGroup   = "recording.kinugasa.dev"
 	APIVersion = "v1alpha1"
 
-	RecordingKind     = "Recording"
-	RecordingListKind = "RecordingList"
-	RecordingPlural   = "recordings"
-	RecordingSingular = "recording"
+	TakeKind     = "Take"
+	TakeListKind = "TakeList"
+	TakePlural   = "takes"
+	TakeSingular = "take"
 
 	StreamKind     = "Stream"
 	StreamListKind = "StreamList"

@@ -5,7 +5,7 @@ Minimal Go application for the recording server.
 ## Structure
 
 ```text
-domain/             Recording and Stream CRD domain metadata
+domain/             Take and Stream CRD domain metadata
 service/            application use cases
 presentation/       Echo HTTP API
 main.go             wiring and startup
@@ -33,8 +33,8 @@ go run . --print-crd
 
 The bundle currently contains:
 
-- `Stream`: receives an RIST/SRT input, relays it to LiveKit continuously, and exposes a recording endpoint for one-shot recorder Pods.
-- `Recording`: represents one recording request. The server usecase sets the S3 object key, and the operator reconciles it into a non-restarting Job.
+- `Stream`: receives an RIST/SRT input, relays it to LiveKit continuously, and exposes a take endpoint for one-shot recorder Pods.
+- `Take`: represents one start/stop capture attempt. The server usecase sets the S3 object key, and the operator reconciles it into a non-restarting Job.
 
 ## Operator Mode
 
@@ -45,12 +45,12 @@ go run . --enable-operator
 Operator mode starts the HTTP API and reconciles:
 
 - `Stream` into a LiveKit WHIP ingress, a Secret containing the generated WHIP URL, a single-replica relay Deployment, and a UDP Service. The relay container runs FFmpeg and forwards to LiveKit continuously.
-- `Recording` into a Job with `restartPolicy: Never` and `backoffLimit: 0`. The Pod has a recorder container and an uploader container. The recorder runs FFmpeg into a shared `emptyDir`; the uploader runs rclone and uploads that file to the server-selected S3 object key from `spec.output.s3.objectKey`.
+- `Take` into a Job with `restartPolicy: Never` and `backoffLimit: 0`. The Pod has a recorder container and an uploader container. The recorder runs FFmpeg into a shared `emptyDir`; the uploader runs rclone and uploads that file to the server-selected S3 object key from `spec.output.s3.objectKey`.
 
 If `Stream.spec.livekit.url` is set, the operator treats that URL as an
 externally managed LiveKit output and skips LiveKit ingress creation.
 
-Stop requests are written to `Recording.spec.stopRequestedAt`. The operator patches the active recorder Pod annotation and exposes it through a Downward API file at `/var/run/kinugasa/recording-control/stop-requested-at`, so the recorder can finalize and upload before exiting.
+Stop requests are written to `Take.spec.stopRequestedAt`. The operator patches the active recorder Pod annotation and exposes it through a Downward API file at `/var/run/kinugasa/take-control/stop-requested-at`, so the recorder can finalize and upload before exiting.
 
 The relay image must provide `/bin/sh` and `ffmpeg`. The recorder image must
 provide `/bin/sh` and `ffmpeg`. The uploader image must provide `/bin/sh` and

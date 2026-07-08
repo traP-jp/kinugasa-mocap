@@ -10,6 +10,6 @@ spec:
     nodePort: 30901
   livekit:
     room: studio-rist
-  recording:
+  take:
     protocol: srt
     port: 10000

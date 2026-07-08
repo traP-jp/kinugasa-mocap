@@ -11,8 +11,8 @@ func AddToScheme(scheme *runtime.Scheme) error {
 		domain.GroupVersion,
 		&domain.Stream{},
 		&domain.StreamList{},
-		&domain.Recording{},
-		&domain.RecordingList{},
+		&domain.Take{},
+		&domain.TakeList{},
 	)
 	metav1.AddToGroupVersion(scheme, domain.GroupVersion)
 	return nil

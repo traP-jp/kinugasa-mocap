@@ -212,7 +212,7 @@ func (r *StreamReconciler) updateStatus(ctx context.Context, stream *domain.Stre
 	next.Status.ObservedGeneration = stream.Generation
 	next.Status.Phase = "Running"
 	next.Status.ServiceName = streamWorkloadName(stream)
-	next.Status.RecordingEndpoint = streamRecordingEndpoint(stream)
+	next.Status.TakeEndpoint = streamTakeEndpoint(stream)
 	next.Status.Error = ""
 	if equality.Semantic.DeepEqual(previous, next.Status) {
 		return nil
@@ -225,7 +225,7 @@ func (r *StreamReconciler) updateStatusError(ctx context.Context, stream *domain
 	next.Status.ObservedGeneration = stream.Generation
 	next.Status.Phase = "Failed"
 	next.Status.ServiceName = streamWorkloadName(stream)
-	next.Status.RecordingEndpoint = streamRecordingEndpoint(stream)
+	next.Status.TakeEndpoint = streamTakeEndpoint(stream)
 	next.Status.Error = err.Error()
 	if equality.Semantic.DeepEqual(stream.Status, next.Status) {
 		return nil

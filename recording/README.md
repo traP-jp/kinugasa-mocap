@@ -16,7 +16,7 @@ nix run .#recording:crd
 
 `nix run .#recording:up` builds `recording-server:dev`, creates a
 `kinugasa-mocap` k3d cluster if needed, imports the image, applies the
-`Stream` and `Recording` CRDs, and starts the server in the cluster.
+`Stream` and `Take` CRDs, and starts the server in the cluster.
 `nix run .#recording:port-forward`
 exposes it on
 `localhost:8080`.

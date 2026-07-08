@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	defaultRecordingProtocol = "srt"
-	defaultRecordingPort     = int32(10000)
-	liveKitIngressURLKey     = "url"
-	liveKitStreamKeyKey      = "streamKey"
+	defaultTakeProtocol  = "srt"
+	defaultTakePort      = int32(10000)
+	liveKitIngressURLKey = "url"
+	liveKitStreamKeyKey  = "streamKey"
 )
 
 type StreamWorkloadOptions struct {
@@ -125,7 +125,7 @@ func UpdateStreamService(service *corev1.Service, stream *domain.Stream) bool {
 }
 
 func streamRelayContainer(stream *domain.Stream, options StreamWorkloadOptions) corev1.Container {
-	port := recordingPort(stream)
+	port := takePort(stream)
 	return corev1.Container{
 		Name:            "relay",
 		Image:           options.RelayImage,
@@ -143,8 +143,8 @@ func streamRelayEnv(stream *domain.Stream) []corev1.EnvVar {
 		liveKitOutputEnvVar(stream),
 		{Name: "LIVEKIT_OUTPUT_OPTIONS", Value: liveKitOutputOptions(stream)},
 		{Name: "RELAY_CODEC_ARGS", Value: relayCodecArgs(stream)},
-		{Name: "RECORDING_FANOUT_URI", Value: "udp://127.0.0.1:23000?pkt_size=1316"},
-		{Name: "RECORDING_OUTPUT_URI", Value: recordingOutput(stream)},
+		{Name: "TAKE_FANOUT_URI", Value: "udp://127.0.0.1:23000?pkt_size=1316"},
+		{Name: "TAKE_OUTPUT_URI", Value: takeOutput(stream)},
 	}
 	if stream.Spec.LiveKit.TokenSecretRef != nil &&
 		stream.Spec.LiveKit.TokenSecretRef.Name != "" &&
@@ -188,21 +188,21 @@ if [ -n "${LIVEKIT_TOKEN:-}" ]; then
   auth_headers="-headers Authorization: Bearer ${LIVEKIT_TOKEN}"
 fi
 
-recording_fanout() {
+take_fanout() {
   while true; do
     ffmpeg -hide_banner -loglevel info \
       -i "udp://127.0.0.1:23000?fifo_size=1000000&overrun_nonfatal=1" \
       -map 0 \
       -c copy \
       -f mpegts \
-      "${RECORDING_OUTPUT_URI}" || true
+      "${TAKE_OUTPUT_URI}" || true
     sleep 1
   done
 }
 
-recording_fanout &
-recording_pid="$!"
-trap 'kill "${recording_pid}" 2>/dev/null || true' INT TERM EXIT
+take_fanout &
+take_pid="$!"
+trap 'kill "${take_pid}" 2>/dev/null || true' INT TERM EXIT
 
 ffmpeg -hide_banner -loglevel info \
   -i "${INPUT_URI}" \
@@ -210,7 +210,7 @@ ffmpeg -hide_banner -loglevel info \
   ${RELAY_CODEC_ARGS} \
   ${auth_headers} \
   -f tee \
-  "${LIVEKIT_OUTPUT_OPTIONS}${LIVEKIT_OUTPUT_URI}|[f=mpegts:onfail=ignore]${RECORDING_FANOUT_URI}"
+  "${LIVEKIT_OUTPUT_OPTIONS}${LIVEKIT_OUTPUT_URI}|[f=mpegts:onfail=ignore]${TAKE_FANOUT_URI}"
 	`)
 }
 
@@ -229,8 +229,8 @@ func liveKitOutputOptions(stream *domain.Stream) string {
 	return "[f=" + format + "]"
 }
 
-func recordingOutput(stream *domain.Stream) string {
-	return recordingProtocol(stream) + "://:" + int32String(recordingPort(stream)) + "?mode=listener"
+func takeOutput(stream *domain.Stream) string {
+	return takeProtocol(stream) + "://:" + int32String(takePort(stream)) + "?mode=listener"
 }
 
 func relayCodecArgs(stream *domain.Stream) string {
@@ -250,8 +250,8 @@ func streamServiceType(stream *domain.Stream) corev1.ServiceType {
 func streamServicePorts(stream *domain.Stream) []corev1.ServicePort {
 	ports := []corev1.ServicePort{
 		{
-			Name:     "recording",
-			Port:     recordingPort(stream),
+			Name:     "take",
+			Port:     takePort(stream),
 			Protocol: corev1.ProtocolUDP,
 		},
 	}
@@ -269,11 +269,11 @@ func streamServicePorts(stream *domain.Stream) []corev1.ServicePort {
 	return ports
 }
 
-func streamContainerPorts(stream *domain.Stream, recordingPort int32) []corev1.ContainerPort {
+func streamContainerPorts(stream *domain.Stream, takePort int32) []corev1.ContainerPort {
 	ports := []corev1.ContainerPort{
 		{
-			Name:          "recording",
-			ContainerPort: recordingPort,
+			Name:          "take",
+			ContainerPort: takePort,
 			Protocol:      corev1.ProtocolUDP,
 		},
 	}
@@ -311,16 +311,16 @@ func streamPodAnnotations(stream *domain.Stream) map[string]string {
 	return annotations
 }
 
-func recordingProtocol(stream *domain.Stream) string {
-	if stream.Spec.Recording.Protocol == "" {
-		return defaultRecordingProtocol
+func takeProtocol(stream *domain.Stream) string {
+	if stream.Spec.Take.Protocol == "" {
+		return defaultTakeProtocol
 	}
-	return stream.Spec.Recording.Protocol
+	return stream.Spec.Take.Protocol
 }
 
-func recordingPort(stream *domain.Stream) int32 {
-	if stream.Spec.Recording.Port == 0 {
-		return defaultRecordingPort
+func takePort(stream *domain.Stream) int32 {
+	if stream.Spec.Take.Port == 0 {
+		return defaultTakePort
 	}
-	return stream.Spec.Recording.Port
+	return stream.Spec.Take.Port
 }

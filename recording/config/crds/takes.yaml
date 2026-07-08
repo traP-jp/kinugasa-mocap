@@ -1,14 +1,14 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: recordings.recording.kinugasa.dev
+  name: takes.recording.kinugasa.dev
 spec:
   group: recording.kinugasa.dev
   names:
-    kind: Recording
-    listKind: RecordingList
-    plural: recordings
-    singular: recording
+    kind: Take
+    listKind: TakeList
+    plural: takes
+    singular: take
   scope: Namespaced
   versions:
     - name: v1alpha1
@@ -81,7 +81,7 @@ spec:
                   type: string
                   enum:
                     - Pending
-                    - Recording
+                    - Capturing
                     - StopRequested
                     - Uploading
                     - Completed

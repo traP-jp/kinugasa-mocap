@@ -40,8 +40,8 @@ func TestCRD(t *testing.T) {
 	body := recorder.Body.String()
 	for _, want := range []string{
 		"kind: CustomResourceDefinition",
-		"name: recordings.recording.kinugasa.dev",
-		"kind: Recording",
+		"name: takes.recording.kinugasa.dev",
+		"kind: Take",
 		"name: streams.recording.kinugasa.dev",
 		"kind: Stream",
 		"objectKey",

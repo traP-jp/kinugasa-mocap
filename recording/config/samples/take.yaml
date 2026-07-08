@@ -1,14 +1,14 @@
 apiVersion: recording.kinugasa.dev/v1alpha1
-kind: Recording
+kind: Take
 metadata:
-  name: session-001
+  name: take-001
 spec:
   streamRef:
     name: studio-a
   output:
     s3:
       bucket: mocap-recordings
-      objectKey: recordings/session-001.mp4
+      objectKey: takes/take-001.mp4
       region: ap-northeast-1
       secretRef:
         name: s3-credentials

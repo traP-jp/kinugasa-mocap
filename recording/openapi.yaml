@@ -1,0 +1,610 @@
+openapi: 3.0.3
+info:
+  title: Kinugasa Capture API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: health
+  - name: cameras
+  - name: takes
+  - name: livekit
+paths:
+  /healthz:
+    get:
+      tags:
+        - health
+      operationId: getHealthz
+      summary: Health check
+      responses:
+        "200":
+          description: The server is healthy.
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "ok\n"
+
+  /cameras:
+    get:
+      tags:
+        - cameras
+      operationId: listCameras
+      summary: List cameras
+      parameters:
+        - name: protocol
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CameraProtocol"
+      responses:
+        "200":
+          description: Cameras.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CameraList"
+    post:
+      tags:
+        - cameras
+      operationId: createCamera
+      summary: Add a camera ingest endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCameraRequest"
+      responses:
+        "201":
+          description: Camera created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Camera"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /cameras/{cameraId}:
+    get:
+      tags:
+        - cameras
+      operationId: getCamera
+      summary: Get a camera
+      parameters:
+        - $ref: "#/components/parameters/CameraId"
+      responses:
+        "200":
+          description: Camera.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Camera"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags:
+        - cameras
+      operationId: deleteCamera
+      summary: Delete a camera ingest endpoint
+      parameters:
+        - $ref: "#/components/parameters/CameraId"
+      responses:
+        "204":
+          description: Camera deleted.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /cameras/{cameraId}/endpoint:
+    get:
+      tags:
+        - cameras
+      operationId: getCameraEndpoint
+      summary: Get the camera ingest endpoint
+      description: Returns the URL that the frontend can render as a QR code for camera setup.
+      parameters:
+        - $ref: "#/components/parameters/CameraId"
+      responses:
+        "200":
+          description: Camera ingest endpoint.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CameraEndpoint"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /takes:
+    get:
+      tags:
+        - takes
+      operationId: listTakes
+      summary: List takes
+      parameters:
+        - name: cameraId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: phase
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TakePhase"
+      responses:
+        "200":
+          description: Takes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TakeList"
+    post:
+      tags:
+        - takes
+      operationId: startTake
+      summary: Start a take
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartTakeRequest"
+      responses:
+        "201":
+          description: Take started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Take"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /takes/{takeId}:
+    get:
+      tags:
+        - takes
+      operationId: getTake
+      summary: Get a take
+      parameters:
+        - $ref: "#/components/parameters/TakeId"
+      responses:
+        "200":
+          description: Take.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Take"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /takes/{takeId}/stop:
+    post:
+      tags:
+        - takes
+      operationId: stopTake
+      summary: Stop a take
+      parameters:
+        - $ref: "#/components/parameters/TakeId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StopTakeRequest"
+      responses:
+        "200":
+          description: Stop requested.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Take"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /livekit:
+    get:
+      tags:
+        - livekit
+      operationId: getLiveKitInfo
+      summary: Get LiveKit service information
+      responses:
+        "200":
+          description: LiveKit service information.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveKitInfo"
+
+  /livekit/rooms:
+    get:
+      tags:
+        - livekit
+      operationId: listLiveKitRooms
+      summary: List LiveKit rooms used by cameras
+      responses:
+        "200":
+          description: LiveKit rooms.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveKitRoomList"
+
+  /livekit/rooms/{roomName}/connection:
+    get:
+      tags:
+        - livekit
+      operationId: getLiveKitConnection
+      summary: Get LiveKit connection details
+      parameters:
+        - name: roomName
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: participantIdentity
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: participantName
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: LiveKit connection details for a frontend client.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveKitConnection"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  parameters:
+    CameraId:
+      name: cameraId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    TakeId:
+      name: takeId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+
+  responses:
+    BadRequest:
+      description: The request is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: The requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: The request conflicts with the current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    CameraProtocol:
+      type: string
+      enum:
+        - srt
+        - rist
+
+    CameraPhase:
+      type: string
+      enum:
+        - pending
+        - ready
+        - degraded
+        - failed
+
+    CreateCameraRequest:
+      type: object
+      required:
+        - displayName
+        - protocol
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+        protocol:
+          $ref: "#/components/schemas/CameraProtocol"
+        liveKitRoom:
+          type: string
+          minLength: 1
+
+    CameraList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Camera"
+
+    Camera:
+      type: object
+      required:
+        - id
+        - displayName
+        - protocol
+        - phase
+        - endpoint
+        - liveKit
+        - createdAt
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        protocol:
+          $ref: "#/components/schemas/CameraProtocol"
+        phase:
+          $ref: "#/components/schemas/CameraPhase"
+        endpoint:
+          $ref: "#/components/schemas/CameraEndpoint"
+        liveKit:
+          $ref: "#/components/schemas/CameraLiveKit"
+        error:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CameraEndpoint:
+      type: object
+      required:
+        - protocol
+        - url
+        - qrCodeText
+      properties:
+        protocol:
+          $ref: "#/components/schemas/CameraProtocol"
+        url:
+          type: string
+          minLength: 1
+          description: URL to configure on the camera.
+          example: srt://capture.example.com:9000?mode=caller
+        qrCodeText:
+          type: string
+          minLength: 1
+          description: Text payload that the frontend should render as a QR code.
+          example: srt://capture.example.com:9000?mode=caller
+
+    CameraLiveKit:
+      type: object
+      required:
+        - room
+        - connected
+      properties:
+        room:
+          type: string
+        connected:
+          type: boolean
+        participantIdentity:
+          type: string
+        participantName:
+          type: string
+
+    TakePhase:
+      type: string
+      enum:
+        - pending
+        - capturing
+        - stop_requested
+        - uploading
+        - completed
+        - failed
+
+    StartTakeRequest:
+      type: object
+      required:
+        - cameraId
+        - output
+      properties:
+        cameraId:
+          type: string
+          minLength: 1
+        output:
+          $ref: "#/components/schemas/TakeOutputRequest"
+
+    StopTakeRequest:
+      type: object
+      properties:
+        requestedAt:
+          type: string
+          format: date-time
+
+    TakeList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Take"
+
+    Take:
+      type: object
+      required:
+        - id
+        - cameraId
+        - phase
+        - output
+        - createdAt
+      properties:
+        id:
+          type: string
+        cameraId:
+          type: string
+        phase:
+          $ref: "#/components/schemas/TakePhase"
+        output:
+          $ref: "#/components/schemas/TakeOutput"
+        startedAt:
+          type: string
+          format: date-time
+        stopRequestedAt:
+          type: string
+          format: date-time
+        stoppedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        error:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TakeOutputRequest:
+      type: object
+      required:
+        - s3
+      properties:
+        s3:
+          $ref: "#/components/schemas/S3OutputRequest"
+
+    S3OutputRequest:
+      type: object
+      required:
+        - bucket
+      properties:
+        bucket:
+          type: string
+          minLength: 1
+        objectKey:
+          type: string
+          minLength: 1
+          description: If omitted, the server allocates an object key.
+        endpoint:
+          type: string
+        region:
+          type: string
+        credentialProfile:
+          type: string
+          description: Application-level credential profile for writing the object.
+
+    TakeOutput:
+      type: object
+      required:
+        - s3
+      properties:
+        s3:
+          $ref: "#/components/schemas/S3Output"
+
+    S3Output:
+      type: object
+      required:
+        - bucket
+        - objectKey
+      properties:
+        bucket:
+          type: string
+        objectKey:
+          type: string
+        uri:
+          type: string
+          example: s3://mocap-captures/takes/take-001.mp4
+        endpoint:
+          type: string
+        region:
+          type: string
+
+    LiveKitInfo:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          minLength: 1
+
+    LiveKitRoomList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveKitRoom"
+
+    LiveKitRoom:
+      type: object
+      required:
+        - name
+        - cameraId
+      properties:
+        name:
+          type: string
+        cameraId:
+          type: string
+        connected:
+          type: boolean
+
+    LiveKitConnection:
+      type: object
+      required:
+        - url
+        - room
+        - token
+        - participantIdentity
+      properties:
+        url:
+          type: string
+        room:
+          type: string
+        token:
+          type: string
+        participantIdentity:
+          type: string
+        participantName:
+          type: string

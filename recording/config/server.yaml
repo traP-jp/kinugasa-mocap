@@ -27,7 +27,7 @@ rules:
   - apiGroups:
       - recording.kinugasa.dev
     resources:
-      - recordings
+      - takes
     verbs:
       - get
       - list
@@ -36,7 +36,7 @@ rules:
       - recording.kinugasa.dev
     resources:
       - streams/status
-      - recordings/status
+      - takes/status
     verbs:
       - get
       - update
