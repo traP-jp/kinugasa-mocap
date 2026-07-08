@@ -122,11 +122,14 @@
 
       packages."recording:crd" = pkgs.writeShellApplication {
         name = "recording-crd";
-        runtimeInputs = with pkgs; [ curl ];
+        runtimeInputs = with pkgs; [
+          git
+          go
+        ];
         text = ''
-          HOST_PORT=''${HOST_PORT:-8080}
+          GIT_ROOT=$(git rev-parse --show-toplevel)
 
-          curl -s "http://localhost:$HOST_PORT/crd"
+          go run "$GIT_ROOT/recording/server" --print-crd
         '';
       };
 

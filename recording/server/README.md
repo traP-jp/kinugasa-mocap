@@ -23,7 +23,7 @@ go run .
 The server exposes:
 
 - `GET /healthz`
-- `GET /crd`
+- camera, take, and LiveKit endpoints generated from `recording/openapi.yaml`
 
 The bundled Kubernetes CRDs can also be printed directly:
 

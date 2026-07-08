@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
@@ -26,6 +27,8 @@ func main() {
 	relayImage := flag.String("stream-relay-image", "linuxserver/ffmpeg:latest", "image used for Stream relay pods; must provide /bin/sh and ffmpeg")
 	recorderImage := flag.String("recording-recorder-image", "linuxserver/ffmpeg:latest", "image used for one-shot Take recorder containers; must provide /bin/sh and ffmpeg")
 	uploaderImage := flag.String("recording-uploader-image", "rclone/rclone:latest", "image used for one-shot Take uploader containers; must provide /bin/sh and rclone")
+	publicIngestHost := flag.String("public-ingest-host", "127.0.0.1", "host used when generating camera ingest endpoint URLs for frontend QR codes")
+	resourceNamespace := flag.String("resource-namespace", "default", "namespace used for Stream and Take custom resources managed by the API")
 	liveKitURL := flag.String("livekit-url", "http://livekit-server.recording-system.svc.cluster.local:7880", "LiveKit server URL used by the operator")
 	liveKitAPIKey := flag.String("livekit-api-key", "devkey", "LiveKit API key used by the operator")
 	liveKitAPISecret := flag.String("livekit-api-secret", "secret", "LiveKit API secret used by the operator")
@@ -46,9 +49,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	apiServer := presentation.NewAPIServer(*addr, crdService)
+	usecaseConfig := service.UsecaseConfig{
+		PublicIngestHost:  *publicIngestHost,
+		ResourceNamespace: *resourceNamespace,
+		LiveKitURL:        *liveKitURL,
+	}
 	if *enableOperator {
-		if err := runOperator(ctx, apiServer, operatorOptions{
+		if err := runOperator(ctx, *addr, usecaseConfig, operatorOptions{
 			MetricsAddr:   *metricsAddr,
 			RelayImage:    *relayImage,
 			RecorderImage: *recorderImage,
@@ -66,6 +73,18 @@ func main() {
 		return
 	}
 
+	scheme, err := newRuntimeScheme()
+	if err != nil {
+		log.Fatal(err)
+	}
+	k8sClient, err := ctrlclient.New(ctrl.GetConfigOrDie(), ctrlclient.Options{Scheme: scheme})
+	if err != nil {
+		log.Fatal(err)
+	}
+	apiServer, err := presentation.NewAPIServer(*addr, service.NewKubernetesUsecase(k8sClient, usecaseConfig))
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("recording server listening on %s", *addr)
 	if err := apiServer.Start(ctx); err != nil {
 		log.Fatal(err)
@@ -81,17 +100,13 @@ type operatorOptions struct {
 	ZapOptions    zap.Options
 }
 
-func runOperator(ctx context.Context, apiServer *presentation.APIServer, options operatorOptions) error {
+func runOperator(ctx context.Context, addr string, usecaseConfig service.UsecaseConfig, options operatorOptions) error {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&options.ZapOptions)))
 
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+	scheme, err := newRuntimeScheme()
+	if err != nil {
 		return err
 	}
-	if err := k8s.AddToScheme(scheme); err != nil {
-		return err
-	}
-
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:  scheme,
 		Metrics: metricsserver.Options{BindAddress: options.MetricsAddr},
@@ -123,10 +138,25 @@ func runOperator(ctx context.Context, apiServer *presentation.APIServer, options
 	}).SetupWithManager(mgr); err != nil {
 		return err
 	}
+	apiServer, err := presentation.NewAPIServer(addr, service.NewKubernetesUsecase(mgr.GetClient(), usecaseConfig))
+	if err != nil {
+		return err
+	}
 	if err := mgr.Add(apiServer); err != nil {
 		return err
 	}
 
 	log.Printf("recording operator listening on %s", apiServer.Addr())
 	return mgr.Start(ctx)
+}
+
+func newRuntimeScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := k8s.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	return scheme, nil
 }

@@ -26,6 +26,9 @@ spec:
                 - input
                 - livekit
               properties:
+                displayName:
+                  type: string
+                  minLength: 1
                 input:
                   type: object
                   required:

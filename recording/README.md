@@ -14,7 +14,8 @@ nix run .#recording:health
 nix run .#recording:crd
 ```
 
-`nix run .#recording:up` builds `recording-server:dev`, creates a
+`nix run .#recording:crd` prints the bundled local CRD manifests. `nix run
+.#recording:up` builds `recording-server:dev`, creates a
 `kinugasa-mocap` k3d cluster if needed, imports the image, applies the
 `Stream` and `Take` CRDs, and starts the server in the cluster.
 `nix run .#recording:port-forward`

@@ -528,9 +528,6 @@ components:
           type: string
         region:
           type: string
-        credentialProfile:
-          type: string
-          description: Application-level credential profile for writing the object.
 
     TakeOutput:
       type: object

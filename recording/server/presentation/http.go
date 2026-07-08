@@ -6,38 +6,50 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/comavius/kinugasa-mocap/recording/server/presentation/api"
 	"github.com/comavius/kinugasa-mocap/recording/server/service"
-	"github.com/labstack/echo/v4"
 )
 
 type APIServer struct {
 	addr    string
-	service *service.CRDService
+	handler http.Handler
 }
 
-func NewAPIServer(addr string, service *service.CRDService) *APIServer {
+func NewAPIServer(addr string, usecase service.Usecase) (*APIServer, error) {
+	handler, err := api.NewServer(newAPIHandler(usecase))
+	if err != nil {
+		return nil, err
+	}
 	return &APIServer{
 		addr:    addr,
-		service: service,
-	}
+		handler: handler,
+	}, nil
 }
 
 func (s *APIServer) Addr() string {
 	return s.addr
 }
 
+func (s *APIServer) Handler() http.Handler {
+	return s.handler
+}
+
 func (s *APIServer) Start(ctx context.Context) error {
-	e := s.Router()
+	server := &http.Server{
+		Addr:              s.addr,
+		Handler:           s.handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- e.Start(s.addr)
+		errCh <- server.ListenAndServe()
 	}()
 
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		err := e.Shutdown(shutdownCtx)
+		err := server.Shutdown(shutdownCtx)
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
@@ -48,19 +60,4 @@ func (s *APIServer) Start(ctx context.Context) error {
 		}
 		return err
 	}
-}
-
-func (s *APIServer) Router() *echo.Echo {
-	e := echo.New()
-	e.HideBanner = true
-	e.HidePort = true
-
-	e.GET("/healthz", func(c echo.Context) error {
-		return c.String(http.StatusOK, "ok\n")
-	})
-	e.GET("/crd", func(c echo.Context) error {
-		return c.Blob(http.StatusOK, "application/yaml; charset=utf-8", s.service.Manifest())
-	})
-
-	return e
 }

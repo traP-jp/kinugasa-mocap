@@ -20,9 +20,10 @@ type Stream struct {
 }
 
 type StreamSpec struct {
-	Input   StreamInputSpec `json:"input"`
-	LiveKit LiveKitSpec     `json:"livekit"`
-	Take    StreamTakeSpec  `json:"take,omitempty"`
+	DisplayName string          `json:"displayName,omitempty"`
+	Input       StreamInputSpec `json:"input"`
+	LiveKit     LiveKitSpec     `json:"livekit"`
+	Take        StreamTakeSpec  `json:"take,omitempty"`
 }
 
 type StreamInputSpec struct {
