@@ -2,6 +2,7 @@ package presentation
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -75,11 +76,55 @@ func TestCameraAndTakeAPI(t *testing.T) {
 		t.Fatalf("stream input port = %d, want 9000", stream.Spec.Input.Port)
 	}
 
+	liveKitRecorder := httptest.NewRecorder()
+	liveKitRequest := httptest.NewRequest(http.MethodGet, "/livekit", nil)
+	server.Handler().ServeHTTP(liveKitRecorder, liveKitRequest)
+	if liveKitRecorder.Code != http.StatusOK {
+		t.Fatalf("get livekit status = %d, body = %s", liveKitRecorder.Code, liveKitRecorder.Body.String())
+	}
+	var liveKitInfo struct {
+		URL string `json:"url"`
+	}
+	decodeJSON(t, liveKitRecorder, &liveKitInfo)
+	if liveKitInfo.URL != "wss://livekit.example.com" {
+		t.Fatalf("livekit url = %q, want wss://livekit.example.com", liveKitInfo.URL)
+	}
+
 	endpointRecorder := httptest.NewRecorder()
 	endpointRequest := httptest.NewRequest(http.MethodGet, "/cameras/"+camera.ID+"/endpoint", nil)
 	server.Handler().ServeHTTP(endpointRecorder, endpointRequest)
 	if endpointRecorder.Code != http.StatusOK {
 		t.Fatalf("get endpoint status = %d, body = %s", endpointRecorder.Code, endpointRecorder.Body.String())
+	}
+
+	connectionRecorder := httptest.NewRecorder()
+	connectionRequest := httptest.NewRequest(http.MethodGet, "/livekit/rooms/"+camera.LiveKit.Room+"/connection?participantIdentity=viewer-1&participantName=Viewer+1", nil)
+	server.Handler().ServeHTTP(connectionRecorder, connectionRequest)
+	if connectionRecorder.Code != http.StatusOK {
+		t.Fatalf("get livekit connection status = %d, body = %s", connectionRecorder.Code, connectionRecorder.Body.String())
+	}
+	var connection struct {
+		URL                 string `json:"url"`
+		Room                string `json:"room"`
+		Token               string `json:"token"`
+		ParticipantIdentity string `json:"participantIdentity"`
+		ParticipantName     string `json:"participantName"`
+	}
+	decodeJSON(t, connectionRecorder, &connection)
+	if connection.URL != "wss://livekit.example.com" {
+		t.Fatalf("connection url = %q, want wss://livekit.example.com", connection.URL)
+	}
+	if connection.Room != camera.LiveKit.Room {
+		t.Fatalf("connection room = %q, want %q", connection.Room, camera.LiveKit.Room)
+	}
+	if connection.Token != "token:studio-a:viewer-1:Viewer 1" {
+		t.Fatalf("connection token = %q, want fake token", connection.Token)
+	}
+	if connection.ParticipantIdentity != "viewer-1" {
+		t.Fatalf("participant identity = %q, want viewer-1", connection.ParticipantIdentity)
+	}
+	if connection.ParticipantName != "Viewer 1" {
+		t.Fatalf("participant name = %q, want Viewer 1", connection.ParticipantName)
 	}
 
 	takeRecorder := httptest.NewRecorder()
@@ -150,13 +195,23 @@ func newTestServerWithClient(t *testing.T) (*APIServer, client.Client) {
 	}
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	server, err := NewAPIServer(":0", service.NewKubernetesUsecase(k8sClient, service.UsecaseConfig{
-		PublicIngestHost: "capture.example.com",
-		LiveKitURL:       "ws://livekit.example.com",
+		PublicIngestHost:   "capture.example.com",
+		LiveKitPublicURL:   "wss://livekit.example.com",
+		LiveKitTokenIssuer: fakeLiveKitTokenIssuer{},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return server, k8sClient
+}
+
+type fakeLiveKitTokenIssuer struct{}
+
+func (fakeLiveKitTokenIssuer) IssueLiveKitToken(ctx context.Context, request service.LiveKitTokenRequest) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return "token:" + request.RoomName + ":" + request.ParticipantIdentity + ":" + request.ParticipantName, nil
 }
 
 func jsonRequest(t *testing.T, method string, target string, body any) *http.Request {

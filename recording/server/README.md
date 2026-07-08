@@ -65,10 +65,14 @@ go run . --enable-operator \
   --recording-recorder-image=linuxserver/ffmpeg:latest \
   --recording-uploader-image=rclone/rclone:latest \
   --livekit-url=http://livekit-server.recording-system.svc.cluster.local:7880 \
+  --livekit-public-url=wss://livekit.example.com \
   --livekit-api-key=devkey \
   --livekit-api-secret=secret \
   --livekit-whip-base-url=http://livekit-ingress.recording-system.svc.cluster.local:8080/whip
 ```
+
+`--livekit-public-url` is returned to frontend clients. LiveKit connection
+tokens are issued on demand from the configured API key and secret.
 
 ## Cluster Run
 

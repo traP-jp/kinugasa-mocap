@@ -40,8 +40,8 @@ func NewKubernetesUsecase(k8sClient client.Client, config UsecaseConfig) *Kubern
 	if config.PublicIngestHost == "" {
 		config.PublicIngestHost = defaultPublicIngestHost
 	}
-	if config.LiveKitURL == "" {
-		config.LiveKitURL = defaultLiveKitURL
+	if config.LiveKitPublicURL == "" {
+		config.LiveKitPublicURL = defaultLiveKitURL
 	}
 	if config.Now == nil {
 		config.Now = time.Now
@@ -294,7 +294,7 @@ func (u *KubernetesUsecase) GetLiveKitInfo(ctx context.Context) (LiveKitInfo, er
 	if err := ctx.Err(); err != nil {
 		return LiveKitInfo{}, err
 	}
-	return LiveKitInfo{URL: u.cfg.LiveKitURL}, nil
+	return LiveKitInfo{URL: u.cfg.LiveKitPublicURL}, nil
 }
 
 func (u *KubernetesUsecase) ListLiveKitRooms(ctx context.Context) ([]LiveKitRoom, error) {
@@ -339,15 +339,30 @@ func (u *KubernetesUsecase) GetLiveKitConnection(ctx context.Context, input Live
 		if name == "" {
 			name = identity
 		}
+		token, err := u.issueLiveKitToken(ctx, LiveKitTokenRequest{
+			RoomName:            input.RoomName,
+			ParticipantIdentity: identity,
+			ParticipantName:     name,
+		})
+		if err != nil {
+			return LiveKitConnection{}, err
+		}
 		return LiveKitConnection{
-			URL:                 u.cfg.LiveKitURL,
+			URL:                 u.cfg.LiveKitPublicURL,
 			Room:                input.RoomName,
-			Token:               u.cfg.LiveKitToken,
+			Token:               token,
 			ParticipantIdentity: identity,
 			ParticipantName:     name,
 		}, nil
 	}
 	return LiveKitConnection{}, ErrNotFound
+}
+
+func (u *KubernetesUsecase) issueLiveKitToken(ctx context.Context, request LiveKitTokenRequest) (string, error) {
+	if u.cfg.LiveKitTokenIssuer == nil {
+		return "", fmt.Errorf("%w: livekit token issuer is required", ErrInvalid)
+	}
+	return u.cfg.LiveKitTokenIssuer.IssueLiveKitToken(ctx, request)
 }
 
 func (u *KubernetesUsecase) listStreams(ctx context.Context) ([]domain.Stream, error) {

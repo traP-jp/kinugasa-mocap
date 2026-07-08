@@ -10,6 +10,7 @@ import (
 
 	"github.com/comavius/kinugasa-mocap/recording/config"
 	"github.com/comavius/kinugasa-mocap/recording/server/infra/k8s"
+	infralivekit "github.com/comavius/kinugasa-mocap/recording/server/infra/livekit"
 	"github.com/comavius/kinugasa-mocap/recording/server/presentation"
 	"github.com/comavius/kinugasa-mocap/recording/server/service"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,6 +31,7 @@ func main() {
 	publicIngestHost := flag.String("public-ingest-host", "127.0.0.1", "host used when generating camera ingest endpoint URLs for frontend QR codes")
 	resourceNamespace := flag.String("resource-namespace", "default", "namespace used for Stream and Take custom resources managed by the API")
 	liveKitURL := flag.String("livekit-url", "http://livekit-server.recording-system.svc.cluster.local:7880", "LiveKit server URL used by the operator")
+	liveKitPublicURL := flag.String("livekit-public-url", "", "LiveKit server URL returned to frontend clients; defaults to --livekit-url")
 	liveKitAPIKey := flag.String("livekit-api-key", "devkey", "LiveKit API key used by the operator")
 	liveKitAPISecret := flag.String("livekit-api-secret", "secret", "LiveKit API secret used by the operator")
 	liveKitWHIPBaseURL := flag.String("livekit-whip-base-url", "http://livekit-ingress.recording-system.svc.cluster.local:8080/whip", "WHIP base URL exposed by LiveKit ingress inside the cluster")
@@ -49,10 +51,22 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	tokenIssuer, err := infralivekit.NewTokenIssuer(infralivekit.TokenIssuerOptions{
+		APIKey:    *liveKitAPIKey,
+		APISecret: *liveKitAPISecret,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	publicLiveKitURL := *liveKitPublicURL
+	if publicLiveKitURL == "" {
+		publicLiveKitURL = *liveKitURL
+	}
 	usecaseConfig := service.UsecaseConfig{
-		PublicIngestHost:  *publicIngestHost,
-		ResourceNamespace: *resourceNamespace,
-		LiveKitURL:        *liveKitURL,
+		PublicIngestHost:   *publicIngestHost,
+		ResourceNamespace:  *resourceNamespace,
+		LiveKitPublicURL:   publicLiveKitURL,
+		LiveKitTokenIssuer: tokenIssuer,
 	}
 	if *enableOperator {
 		if err := runOperator(ctx, *addr, usecaseConfig, operatorOptions{

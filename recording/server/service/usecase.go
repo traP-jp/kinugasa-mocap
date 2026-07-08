@@ -57,11 +57,11 @@ type Usecase interface {
 }
 
 type UsecaseConfig struct {
-	PublicIngestHost  string
-	ResourceNamespace string
-	LiveKitURL        string
-	LiveKitToken      string
-	Now               func() time.Time
+	PublicIngestHost   string
+	ResourceNamespace  string
+	LiveKitPublicURL   string
+	LiveKitTokenIssuer LiveKitTokenIssuer
+	Now                func() time.Time
 }
 
 type CreateCameraInput struct {
@@ -173,6 +173,16 @@ type LiveKitConnection struct {
 	Token               string
 	ParticipantIdentity string
 	ParticipantName     string
+}
+
+type LiveKitTokenRequest struct {
+	RoomName            string
+	ParticipantIdentity string
+	ParticipantName     string
+}
+
+type LiveKitTokenIssuer interface {
+	IssueLiveKitToken(context.Context, LiveKitTokenRequest) (string, error)
 }
 
 func takeActive(phase TakePhase) bool {
